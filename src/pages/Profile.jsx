@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
 
-const SECTIONS = ['Basics', 'Education', 'Portfolio & Links', 'Location', 'Previous Work', 'Behavioral', 'Demographic', 'Legal']
+const SECTIONS = ['Basics', 'Education', 'Portfolio & Links', 'Location', 'Previous Work', 'Behavioral', 'Demographic', 'Legal', 'Email Verification']
 
 const SKILLS_LIST = ['Python', 'Go', 'Golang', 'JavaScript', 'TypeScript', 'Java', 'C++', 'Ruby', 'Rust', 'Swift', 'Kotlin', 'SQL', 'GraphQL', 'REST APIs', 'PostgreSQL', 'MongoDB', 'Redis', 'MySQL', 'AWS', 'GCP', 'Azure', 'Docker', 'Kubernetes', 'CI/CD', 'Linux', 'Backend', 'Frontend', 'Full Stack', 'DevOps', 'ML/AI', 'Data Engineering', 'Mobile', 'React', 'Node.js', 'Django', 'FastAPI', 'Spring Boot']
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Mandarin', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian', 'Hindi', 'Italian']
@@ -64,6 +64,8 @@ export default function Profile() {
     is_student: false, languages: [], vaccinated: true, willing_to_travel: true,
     // Legal
     background_check: true, criminal_history: false, drivers_license: true, drug_test: true,
+    // Email Verification
+    imap_user: '', imap_pass: '',
   })
 
   useEffect(() => {
@@ -143,6 +145,9 @@ export default function Profile() {
         drivers_license: raw.drivers_license ?? true,
         drug_test: raw.drug_test ?? true,
         dashboard_filters: raw.dashboard_filters || {},
+        // Email Verification
+        imap_user: raw.imap_user || '',
+        imap_pass: raw.imap_pass || '',
       }
       setProfile(p)
       setForm(prev => ({
@@ -555,6 +560,39 @@ export default function Profile() {
           <Field label="Do you have any criminal convictions?">
             <YesNo value={form.criminal_history} onChange={v => update('criminal_history', v)} />
             <p style={s.hint}>Default No. Only change if applicable.</p>
+          </Field>
+        </div>
+      )
+
+      case 'Email Verification': return (
+        <div style={s.sectionBody}>
+          <h2 style={s.sectionTitle}>Email Verification</h2>
+          <p style={s.sectionSubtitle}>
+            Some job boards (like Greenhouse) send a verification code to your email before submitting.
+            The bot reads the code automatically using IMAP. Use a Gmail account with an{' '}
+            <strong>App Password</strong> (not your regular password) —{' '}
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{color:'#6d28d9'}}>
+              generate one here
+            </a>.
+          </p>
+          <Field label="Gmail address">
+            <input
+              style={s.input}
+              type="email"
+              placeholder="you@gmail.com"
+              value={form.imap_user}
+              onChange={e => update('imap_user', e.target.value)}
+            />
+          </Field>
+          <Field label="Gmail App Password">
+            <input
+              style={s.input}
+              type="password"
+              placeholder="xxxx xxxx xxxx xxxx"
+              value={form.imap_pass}
+              onChange={e => update('imap_pass', e.target.value)}
+            />
+            <p style={s.hint}>This is stored in your profile and only used to read verification emails. Never shared.</p>
           </Field>
         </div>
       )
