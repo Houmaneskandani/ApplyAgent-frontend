@@ -1,0 +1,17 @@
+export const colors = {
+  brand: '#4F46E5',
+  brandLight: '#6366F1',
+  brandSoft: '#EDE9FE',
+  brandBorder: '#A78BFA',
+  brandText: '#6D28D9',
+  brandMuted: '#8B85C1',
+  page: '#F5F3FF',
+  white: '#FFFFFF',
+  dark: '#1E1B4B',
+  text: '#1E1B4B',
+  textMuted: '#8B85C1',
+  border: '#E8E5FF',
+  success: '#16a34a',
+  successBg: '#f0fdf4',
+  successBorder: '#bbf7d0',
+}
