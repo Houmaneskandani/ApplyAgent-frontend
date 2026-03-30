@@ -44,7 +44,7 @@ export default function Profile() {
     // Education
     degree: "Bachelor's", major: '', school: '', graduation_year: '',
     // Portfolio
-    resume_url: '', linkedin: '', portfolio: '', portfolio_password: '', github: '',
+    resume_url: '', linkedin: '', portfolio: '', github: '',
     // Location
     work_auth: 'citizen', work_preference: [], address: '', address2: '', city: '', state: '', zip: '', country: 'United States',
     willing_to_relocate: false, relocation_cities: '',
@@ -94,7 +94,6 @@ export default function Profile() {
         // Portfolio
         linkedin: raw.linkedin || '',
         portfolio: raw.portfolio || '',
-        portfolio_password: raw.portfolio_password || '',
         github: raw.github || '',
         // Location
         work_auth: raw.work_auth || 'citizen',
@@ -303,9 +302,6 @@ export default function Profile() {
           </Field>
           <Field label="Portfolio / personal website">
             <input style={s.input} value={form.portfolio} onChange={e => update('portfolio', e.target.value)} placeholder="https://" />
-          </Field>
-          <Field label="Portfolio password">
-            <input style={s.input} type="password" value={form.portfolio_password} onChange={e => update('portfolio_password', e.target.value)} />
           </Field>
         </div>
       )
