@@ -374,7 +374,7 @@ export default function Dashboard() {
                 onClick={async () => {
                   setScraping(true)
                   try {
-                    await api.post('/jobs/scrape')
+                    await api.post('/queue/trigger-scrape')
                     // Poll stats every 8s — stop when job count grows or after 3 min
                     const prevCount = stats?.total_jobs || 0
                     const start = Date.now()
