@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ApplyAgentLogo from './Logo'
 import { useState, useRef, useCallback } from 'react'
+import useIsMobile from '../hooks/useIsMobile'
 
 function SlideToLogout({ name, onLogout }) {
   const [offset, setOffset] = useState(0)
@@ -142,6 +143,7 @@ function SlideToLogout({ name, onLogout }) {
 }
 
 export default function Navbar({ credits = 0 }) {
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const location = useLocation()
   const name = localStorage.getItem('name') || '?'
@@ -157,8 +159,8 @@ export default function Navbar({ credits = 0 }) {
   })
 
   return (
-    <nav style={s.nav}>
-      <Link to="/dashboard"><ApplyAgentLogo height={32} variant="dark" /></Link>
+    <nav style={{...s.nav, padding: isMobile ? '0 14px' : '0 28px'}}>
+      <Link to="/dashboard"><ApplyAgentLogo height={28} variant="dark" /></Link>
       <div style={s.links}>
         <Link to="/dashboard" style={navItem('/dashboard')}>Home</Link>
         <Link to="/profile" style={navItem('/profile')}>Profile</Link>
@@ -173,7 +175,10 @@ export default function Navbar({ credits = 0 }) {
           <span style={{ fontSize: '12px' }}>⚡</span>
           <span style={s.creditsNum}>{credits < 10 && credits > 0 ? `${credits} low!` : credits}</span>
         </Link>
-        <SlideToLogout name={name} onLogout={logout} />
+        {isMobile
+          ? <button onClick={logout} style={s.mobileLogout}>✕</button>
+          : <SlideToLogout name={name} onLogout={logout} />
+        }
       </div>
     </nav>
   )
@@ -201,4 +206,10 @@ const s = {
     border: '1px solid rgba(255,255,255,0.2)',
   },
   creditsNum: { fontSize: '13px', fontWeight: '600', color: '#fff' },
+  mobileLogout: {
+    background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '8px', color: '#fff', fontSize: '16px', fontWeight: '700',
+    width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', flexShrink: 0,
+  },
 }

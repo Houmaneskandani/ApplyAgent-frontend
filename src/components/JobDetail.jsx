@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../api'
+import useIsMobile from '../hooks/useIsMobile'
 
 // Decode HTML entities (handles double-encoded descriptions like &lt;h2&gt; → <h2>)
 function decodeEntities(str) {
@@ -10,6 +11,7 @@ function decodeEntities(str) {
 }
 
 export default function JobDetail({ job, onClose, onApply, applying }) {
+  const isMobile = useIsMobile()
   const [description, setDescription] = useState(null)
 
   useEffect(() => {
@@ -35,7 +37,13 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
 
   return (
     <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={s.panel}>
+      <div style={{
+        ...s.panel,
+        width: isMobile ? '100%' : '480px',
+        height: isMobile ? '92vh' : '100vh',
+        alignSelf: isMobile ? 'flex-end' : 'auto',
+        borderRadius: isMobile ? '20px 20px 0 0' : '0',
+      }}>
         {/* Header */}
         <div style={s.header}>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
@@ -97,7 +105,7 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
           {/* Job details */}
           <div style={s.section}>
             <h3 style={s.sectionTitle}>Job details</h3>
-            <div style={s.detailGrid}>
+            <div style={{...s.detailGrid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
               <div style={s.detailItem}>
                 <span style={s.detailLabel}>Company</span>
                 <span style={s.detailValue}>{job.company}</span>

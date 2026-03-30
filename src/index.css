@@ -180,6 +180,25 @@ input[type="range"] { accent-color: #7C3AED; }
 .fade-in-3 { animation: fadeInUp 0.35s 0.15s ease both; }
 .fade-in-4 { animation: fadeInUp 0.35s 0.20s ease both; }
 
+/* ── Mobile responsive ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Prevent horizontal scroll */
+  body { overflow-x: hidden; }
+
+  /* Reduce blob size on mobile to avoid overflow */
+  body::before { width: 120vw; height: 120vw; filter: blur(40px); }
+  body::after  { width: 100vw; height: 100vw; filter: blur(50px); }
+  #root::before { width: 90vw; height: 90vw; filter: blur(50px); }
+  #root::after  { width: 70vw; height: 70vw; filter: blur(40px); }
+
+  /* Disable card lift on touch (avoids sticky hover state on iOS) */
+  .job-card-hover:hover { transform: none; }
+
+  /* Slightly larger tap targets */
+  button { min-height: 40px; }
+  input, select, textarea { font-size: 16px !important; } /* prevents iOS zoom on focus */
+}
+
 /* Job description rendering */
 .job-description { font-size: 14px; color: #444; line-height: 1.7; }
 .job-description ul, .job-description ol { padding-left: 22px; margin: 8px 0; }

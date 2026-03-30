@@ -108,7 +108,7 @@ const s = {
     borderRadius: '14px', border: '1px solid rgba(196,181,253,0.35)',
     marginBottom: '10px', cursor: 'pointer', transition: 'box-shadow 0.15s',
   },
-  cardInner: { padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' },
+  cardInner: { padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
   left: { flex: 1 },
   titleRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' },
   title: { fontSize: '16px', fontWeight: '600', color: '#111' },
@@ -124,7 +124,7 @@ const s = {
   logo: { width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: '700', flexShrink: 0 },
   companyName: { fontSize: '13px', fontWeight: '600', color: '#444' },
   sourceBadge: { fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: '500', marginTop: '2px', display: 'inline-block' },
-  right: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px', flexShrink: 0 },
+  right: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' },
   score: { fontSize: '12px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', border: '1.5px solid #A78BFA', background: '#EDE9FE', color: '#6D28D9' },
   applyBtn: {
     padding: '8px 18px', borderRadius: '8px',

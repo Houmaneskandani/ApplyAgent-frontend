@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../api'
 import ApplyAgentLogo from '../components/Logo'
+import useIsMobile from '../hooks/useIsMobile'
 
 export default function Login() {
+  const isMobile = useIsMobile()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,8 +30,8 @@ export default function Login() {
 
   return (
     <div style={s.container}>
-      {/* Left decorative panel */}
-      <div style={s.left}>
+      {/* Left decorative panel — hidden on mobile */}
+      <div style={{...s.left, display: isMobile ? 'none' : 'flex'}}>
         <div style={s.blob1} />
         <div style={s.blob2} />
         <div style={s.leftContent}>
@@ -44,8 +46,9 @@ export default function Login() {
       </div>
 
       {/* Right form panel */}
-      <div style={s.right}>
-        <div style={s.formBox}>
+      <div style={{...s.right, padding: isMobile ? '32px 20px' : '40px 24px'}}>
+        <div style={{...s.formBox, maxWidth: isMobile ? '100%' : '400px'}}>
+          {isMobile && <div style={{marginBottom: '24px'}}><ApplyAgentLogo height={36} /></div>}
           <div className="fade-in">
             <h2 style={s.title}>Welcome back</h2>
             <p style={s.subtitle}>Sign in to your account</p>
