@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [profileStatus, setProfileStatus] = useState(null) // null=loading, 'ok', 'incomplete'
   const [missingFields, setMissingFields] = useState([])
   const [autoApply, setAutoApply] = useState({ enabled: false, applied_today: 0, daily_limit: 10 })
+  const [sortBy, setSortBy] = useState('score') // 'score' | 'date'
   const [togglingAuto, setTogglingAuto] = useState(false)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -224,9 +225,17 @@ export default function Dashboard() {
       )
     }
 
-    jobs.sort((a, b) => (b.score || 0) - (a.score || 0))
+    if (sortBy === 'date') {
+      jobs.sort((a, b) => {
+        const da = a.created_at ? new Date(a.created_at) : new Date(0)
+        const db = b.created_at ? new Date(b.created_at) : new Date(0)
+        return db - da
+      })
+    } else {
+      jobs.sort((a, b) => (b.score || 0) - (a.score || 0))
+    }
     return jobs
-  }, [allJobs, tab, filters])
+  }, [allJobs, tab, filters, sortBy])
 
   const filteredJobs = getFilteredJobs()
 
@@ -392,6 +401,13 @@ export default function Dashboard() {
                 }}
               >
                 {scraping ? '⏳ Searching...' : '🔍 Search Jobs'}
+              </button>
+              <button
+                style={{...s.filterBtn, background: sortBy === 'date' ? '#7c3aed' : '#374151'}}
+                onClick={() => setSortBy(s => s === 'score' ? 'date' : 'score')}
+                title={sortBy === 'score' ? 'Currently sorted by match score — click to sort by date' : 'Currently sorted by newest — click to sort by match score'}
+              >
+                {sortBy === 'score' ? '⭐ Best Match' : '🕐 Newest First'}
               </button>
               <button style={s.filterBtn} onClick={() => setShowFilters(true)}>
                 ⚙ Filters {activeCount > 0 ? `(${activeCount})` : ''}
