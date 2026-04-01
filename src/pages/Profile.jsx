@@ -575,7 +575,8 @@ export default function Profile() {
           <Field label="Gmail address">
             <input
               style={s.input}
-              type="email"
+              type="text"
+              autoComplete="off"
               placeholder="you@gmail.com"
               value={form.imap_user}
               onChange={e => update('imap_user', e.target.value)}
@@ -585,6 +586,7 @@ export default function Profile() {
             <input
               style={s.input}
               type="password"
+              autoComplete="new-password"
               placeholder="xxxx xxxx xxxx xxxx"
               value={form.imap_pass}
               onChange={e => update('imap_pass', e.target.value)}
