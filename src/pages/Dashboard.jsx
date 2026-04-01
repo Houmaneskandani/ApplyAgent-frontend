@@ -134,7 +134,6 @@ export default function Dashboard() {
       const { position } = res.data
       // Refresh queue immediately
       api.get('/queue/').then(r => setQueue(r.data)).catch(() => {})
-      setTab('Applying')
       if (position > 1) {
         // Just added — no alert needed, UI shows position
       }
