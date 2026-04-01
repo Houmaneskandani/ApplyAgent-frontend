@@ -33,6 +33,7 @@ export default function Profile() {
   const [message, setMessage] = useState({ text: '', type: '' })
   const [langInput, setLangInput] = useState('')
   const [credits, setCredits] = useState(0)
+  const [imapTest, setImapTest] = useState({ status: '', message: '' })
   const fileRef = useRef()
   const navigate = useNavigate()
 
@@ -590,6 +591,25 @@ export default function Profile() {
             />
             <p style={s.hint}>This is stored in your profile and only used to read verification emails. Never shared.</p>
           </Field>
+          <button
+            style={{...s.saveBtn, marginTop: '8px', width: 'auto', padding: '10px 20px', fontSize: '14px'}}
+            onClick={async () => {
+              setImapTest({ status: 'loading', message: '' })
+              try {
+                const r = await api.post('/profile/test-imap')
+                setImapTest({ status: 'ok', message: r.data.message })
+              } catch (err) {
+                setImapTest({ status: 'error', message: err.response?.data?.detail || 'Connection failed' })
+              }
+            }}
+          >
+            {imapTest.status === 'loading' ? '⏳ Testing...' : '🔌 Test Connection'}
+          </button>
+          {imapTest.message && (
+            <p style={{ marginTop: '10px', fontSize: '13px', color: imapTest.status === 'ok' ? '#16a34a' : '#dc2626', fontWeight: '500' }}>
+              {imapTest.message}
+            </p>
+          )}
         </div>
       )
 
