@@ -41,6 +41,10 @@ export default function Dashboard() {
   const [quickRemote, setQuickRemote] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
+  // Per-ATS performance breakdown — fetched alongside other dashboard
+  // data. Renders only when the user has at least one real (non-dry-run)
+  // terminal application; below that threshold the data is just noise.
+  const [perAtsStats, setPerAtsStats] = useState({ per_ats: [], total_attempts: 0 })
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const queuePollRef = useRef(null)
@@ -152,12 +156,16 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [jobsRes, statsRes] = await Promise.all([
+      const [jobsRes, statsRes, perAtsRes] = await Promise.all([
         api.get('/jobs/', { params: { min_score: 1, limit: 200 } }),
-        api.get('/jobs/stats')
+        api.get('/jobs/stats'),
+        // Per-ATS breakdown — best-effort; if it fails (e.g., transient
+        // 500 from the new endpoint) we don't break the dashboard.
+        api.get('/jobs/stats/per-ats').catch(() => ({ data: { per_ats: [], total_attempts: 0 } })),
       ])
       setAllJobs(jobsRes.data)
       setStats(statsRes.data)
+      setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
     } catch {
       navigate('/login')
     } finally {
@@ -260,6 +268,29 @@ export default function Dashboard() {
       loadData()
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Could not retry')
+    }
+  }
+
+  // "Submit anyway" — overrides a reviewer-blocked apply. Re-queues the
+  // application with the force_submit flag set; the next run bypasses
+  // the reviewer entirely. The user has accepted the risk that the
+  // reviewer's concerns may have been valid.
+  const forceSubmitApplication = async (jobId) => {
+    if (!window.confirm(
+      'Submit anyway?\n\n' +
+      'The reviewer flagged issues with this application, but you can ' +
+      'override and submit it as-is. We\'ll bypass the audit and click ' +
+      'Submit immediately on the next attempt.\n\n' +
+      'A credit will be charged if the submission lands successfully.'
+    )) return
+    try {
+      await api.post(`/apply/${jobId}/force-submit`)
+      toast.success('Queued — submitting without reviewer audit')
+      setTab('Applying')
+      setTimeout(() => api.get('/queue/').then(r => setQueue(r.data)).catch(() => {}), 1000)
+      loadData()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not force-submit')
     }
   }
 
@@ -907,6 +938,7 @@ export default function Dashboard() {
             jobs={filteredJobs}
             onConfirm={confirmApplied}
             onRetry={retryApplication}
+            onForceSubmit={forceSubmitApplication}
             onClick={(j) => setSelectedJob(j)}
           />
         ) : tab === 'Applying' ? (
@@ -1013,6 +1045,13 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Per-ATS performance panel — only renders once the user has at
+            least one real apply. Below that threshold the data is just
+            noise (a 100% success-rate on 1 attempt isn't a signal). */}
+        {perAtsStats.total_attempts > 0 && (
+          <PerAtsPanel data={perAtsStats} />
+        )}
       </div>
 
       {showFilters && (
@@ -1056,7 +1095,7 @@ function QueueSpinner() {
  * we fixed that in Phase 1 / Phase 5. Now the user sees them honestly and
  * can either confirm (charge credit) or retry (no charge until success).
  */
-function NeedsReviewList({ jobs, onConfirm, onRetry, onClick }) {
+function NeedsReviewList({ jobs, onConfirm, onRetry, onForceSubmit, onClick }) {
   if (jobs.length === 0) {
     return (
       <div style={s.empty}>
@@ -1078,6 +1117,7 @@ function NeedsReviewList({ jobs, onConfirm, onRetry, onClick }) {
           <div style={s.reviewSub}>
             Open the job, check your email or the company's careers portal, then
             <strong> mark as applied</strong> (0.4 credits) or <strong>retry</strong> (free).
+            For reviewer-blocked applies you trust, you can <strong>submit anyway</strong>.
           </div>
         </div>
       </div>
@@ -1087,6 +1127,7 @@ function NeedsReviewList({ jobs, onConfirm, onRetry, onClick }) {
           job={job}
           onConfirm={() => onConfirm(job.id)}
           onRetry={() => onRetry(job.id)}
+          onForceSubmit={() => onForceSubmit(job.id)}
           onClick={() => onClick(job)}
         />
       ))}
@@ -1094,7 +1135,13 @@ function NeedsReviewList({ jobs, onConfirm, onRetry, onClick }) {
   )
 }
 
-function ReviewCard({ job, onConfirm, onRetry, onClick }) {
+function ReviewCard({ job, onConfirm, onRetry, onForceSubmit, onClick }) {
+  // Show "Submit anyway" only when the reviewer is the reason this row
+  // is in Needs Review — i.e. the notes mention "Reviewer blocked" (the
+  // exact prefix used by run_pre_submit_review in reviewer.py). For
+  // generic unknown/failed rows (CAPTCHA, network, etc) the button
+  // doesn't apply — Retry is the right action there.
+  const reviewerBlocked = (job.notes || '').toLowerCase().includes('reviewer blocked')
   return (
     <div style={s.reviewCard} className="job-card-hover" onClick={onClick}>
       <div style={s.reviewLeft}>
@@ -1128,9 +1175,150 @@ function ReviewCard({ job, onConfirm, onRetry, onClick }) {
         <button style={s.reviewRetryBtn} onClick={onRetry}>
           ↺ Retry
         </button>
+        {reviewerBlocked && (
+          <button
+            style={s.reviewForceBtn}
+            onClick={onForceSubmit}
+            title="Bypass the reviewer and submit immediately"
+          >
+            ⚠ Submit anyway
+          </button>
+        )}
       </div>
     </div>
   )
+}
+
+// ─── PerAtsPanel ─────────────────────────────────────────────────────
+// "Apply performance by ATS" — small data widget rendered at the bottom
+// of the Dashboard. Shows per-source success / failed / unknown counts
+// and a stacked bar so the user can see at a glance "Greenhouse is
+// reliable; Lever needs work." Data comes from GET /jobs/stats/per-ats.
+function PerAtsPanel({ data }) {
+  const rows = data?.per_ats || []
+  if (rows.length === 0) return null
+
+  // Friendly source labels — the DB stores lowercase identifiers.
+  const SOURCE_LABEL = {
+    greenhouse:      'Greenhouse',
+    lever:           'Lever',
+    ashby:           'Ashby',
+    workday:         'Workday',
+    smartrecruiters: 'SmartRecruiters',
+    generic:         'Generic / Other',
+    indeed:          'Indeed',
+    dice:            'Dice',
+    wellfound:       'Wellfound',
+    ycombinator:     'YCombinator',
+    himalayas:       'Himalayas',
+    remotive:        'Remotive',
+    jsearch:         'JSearch',
+  }
+
+  return (
+    <div style={paS.card}>
+      <div style={paS.header}>
+        <span style={paS.title}>📊 Apply performance by ATS</span>
+        <span style={paS.totalChip}>
+          {data.total_attempts} {data.total_attempts === 1 ? 'attempt' : 'attempts'}
+        </span>
+      </div>
+      <div style={paS.tableHeader}>
+        <span style={paS.colSource}>Source</span>
+        <span style={paS.colBar}>Outcome breakdown</span>
+        <span style={paS.colRate}>Success</span>
+        <span style={paS.colCount}>Total</span>
+      </div>
+      {rows.map(row => {
+        const total = row.total || 1
+        const aPct = (row.applied / total) * 100
+        const uPct = (row.unknown / total) * 100
+        const fPct = (row.failed  / total) * 100
+        const rateColor =
+          row.success_rate_pct == null ? '#6B7280'
+          : row.success_rate_pct >= 80 ? '#16A34A'
+          : row.success_rate_pct >= 50 ? '#D97706'
+          : '#DC2626'
+        return (
+          <div key={row.source} style={paS.row}>
+            <span style={paS.colSource}>{SOURCE_LABEL[row.source] || row.source}</span>
+            <div style={paS.colBar}>
+              <div style={paS.stack} role="img" aria-label={`${row.applied} applied, ${row.unknown} unknown, ${row.failed} failed`}>
+                {aPct > 0 && <div style={{ ...paS.seg, background: '#16A34A', width: `${aPct}%` }} title={`${row.applied} applied`} />}
+                {uPct > 0 && <div style={{ ...paS.seg, background: '#D97706', width: `${uPct}%` }} title={`${row.unknown} needs review`} />}
+                {fPct > 0 && <div style={{ ...paS.seg, background: '#DC2626', width: `${fPct}%` }} title={`${row.failed} failed`} />}
+              </div>
+            </div>
+            <span style={{ ...paS.colRate, color: rateColor, fontWeight: 700 }}>
+              {row.success_rate_pct != null ? `${row.success_rate_pct}%` : '—'}
+            </span>
+            <span style={paS.colCount}>{row.total}</span>
+          </div>
+        )
+      })}
+      <div style={paS.legend}>
+        <span style={{ ...paS.legendDot, background: '#16A34A' }} /> Applied
+        <span style={{ ...paS.legendDot, background: '#D97706', marginLeft: 16 }} /> Needs review
+        <span style={{ ...paS.legendDot, background: '#DC2626', marginLeft: 16 }} /> Failed
+      </div>
+    </div>
+  )
+}
+
+const paS = {
+  card: {
+    marginTop: 24,
+    background: 'rgba(255,255,255,0.72)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    border: '1px solid rgba(196,181,253,0.35)',
+    borderRadius: 16,
+    padding: '18px 22px',
+  },
+  header: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  title: { fontSize: 14, fontWeight: 700, color: '#1E1B4B' },
+  totalChip: {
+    fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    background: '#EDE9FE', color: '#5B21B6',
+    border: '1px solid #C4B5FD',
+    padding: '3px 10px', borderRadius: 999,
+  },
+  tableHeader: {
+    display: 'grid',
+    gridTemplateColumns: '140px 1fr 70px 60px',
+    gap: 12, alignItems: 'center',
+    fontSize: 11, fontWeight: 700, color: '#6B7280',
+    letterSpacing: '0.04em', textTransform: 'uppercase',
+    paddingBottom: 8, marginBottom: 6,
+    borderBottom: '1px solid rgba(196,181,253,0.25)',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '140px 1fr 70px 60px',
+    gap: 12, alignItems: 'center',
+    fontSize: 13, color: '#111827',
+    padding: '8px 0',
+  },
+  colSource: { fontWeight: 600 },
+  colBar:    { minWidth: 0 },
+  colRate:   { textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
+  colCount:  { textAlign: 'right', color: '#6B7280', fontVariantNumeric: 'tabular-nums' },
+  stack: {
+    height: 8, borderRadius: 999, overflow: 'hidden',
+    background: '#F3F4F6', display: 'flex',
+  },
+  seg: { height: '100%' },
+  legend: {
+    marginTop: 10, paddingTop: 10,
+    borderTop: '1px solid rgba(196,181,253,0.25)',
+    fontSize: 11, color: '#6B7280',
+    display: 'flex', alignItems: 'center',
+  },
+  legendDot: { display: 'inline-block', width: 8, height: 8, borderRadius: 999, marginRight: 6 },
 }
 
 // Inject spin keyframes once
@@ -1582,6 +1770,14 @@ const s = {
     fontSize: 12, padding: '7px 12px',
     background: '#FFFFFF', color: '#4F46E5',
     border: '1px solid #C4B5FD', borderRadius: 8,
+    fontWeight: 700, cursor: 'pointer',
+  },
+  // "Submit anyway" — amber/warning tone because it's a deliberate
+  // reviewer override. Only shows on reviewer-blocked rows.
+  reviewForceBtn: {
+    fontSize: 12, padding: '7px 12px',
+    background: '#FFFBEB', color: '#B45309',
+    border: '1px solid #FCD34D', borderRadius: 8,
     fontWeight: 700, cursor: 'pointer',
   },
 }
