@@ -6,8 +6,12 @@ import Navbar from '../components/Navbar'
 import JobCard from '../components/JobCard'
 import JobDetail from '../components/JobDetail'
 import FilterPanel from '../components/FilterPanel'
+import AgentActivity from '../ui/AgentActivity'
+import { JobCardSkeleton } from '../ui/Skeleton'
 
-const TABS = ['Job Matches', 'Applying', 'Applied']
+// 'Needs Review' lives between Applying and Applied — that's where 'unknown'
+// outcomes surface so users can confirm-or-retry without losing them.
+const TABS = ['Job Matches', 'Applying', 'Needs Review', 'Applied']
 
 export default function Dashboard() {
   const [tab, setTab] = useState('Job Matches')
@@ -180,6 +184,32 @@ export default function Dashboard() {
     }
   }
 
+  // Phase 5 — manually confirm an unknown apply. Charges the credit
+  // (best-effort; backend doesn't go negative).
+  const confirmApplied = async (jobId) => {
+    try {
+      const res = await api.post(`/apply/${jobId}/confirm`)
+      toast.success(res.data.credit_deducted
+        ? 'Marked as applied — 0.4 credits charged'
+        : 'Marked as applied — credit waived (low balance)')
+      loadData()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not confirm')
+    }
+  }
+
+  // Phase 5 — retry an unknown or failed apply. No credit charge here;
+  // the next live attempt will charge if it lands.
+  const retryApplication = async (jobId) => {
+    try {
+      await api.post(`/apply/${jobId}/retry`)
+      toast.success('Reset — you can re-apply from Job Matches')
+      loadData()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not retry')
+    }
+  }
+
   // PERF: this used to be a `useCallback`-wrapped function that was called on
   // EVERY render — defeating the point of useCallback because the *result*
   // (filteredJobs) was a fresh array each time. With ~200 jobs and ~50 inline
@@ -191,6 +221,7 @@ export default function Dashboard() {
 
     if (tab === 'Applied') jobs = jobs.filter(j => j.status === 'applied')
     else if (tab === 'Applying') jobs = jobs.filter(j => j.status === 'applying')
+    else if (tab === 'Needs Review') jobs = jobs.filter(j => j.status === 'unknown')
     else jobs = jobs.filter(j => !j.status || j.status === 'new')
 
     if (filters.keywords?.length > 0) {
@@ -248,12 +279,10 @@ export default function Dashboard() {
     return jobs
   }, [allJobs, tab, filters, sortBy])
 
-  if (loading) return (
-    <div style={s.loadWrap}>
-      <div style={s.loadSpinner} />
-      <div style={s.loadText}>Finding your matches...</div>
-    </div>
-  )
+  // No full-screen spinner — render the page chrome and skeleton job cards
+  // so users on cold-start Railway requests don't stare at a blank purple
+  // gradient for several seconds. Perceived performance > actual performance.
+  const showSkeletons = loading
 
   const clearFilters = () => {
     const empty = {
@@ -425,24 +454,57 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div style={s.tabs}>
-          {TABS.map((t, i) => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{...s.tab, ...(tab === t ? s.tabActive : {})}}>
-              {t}
-              {t === 'Applying' && queue.length > 0 && (
-                <span style={{
-                  background: tab === 'Applying' ? 'rgba(255,255,255,0.3)' : '#4F46E5',
-                  color: '#fff', fontSize: '11px', fontWeight: '700',
-                  padding: '1px 7px', borderRadius: '20px', minWidth: '18px', textAlign: 'center',
-                }}>{queue.length}</span>
-              )}
-              {i < TABS.length - 1 && <span style={s.tabArrow}>›</span>}
-            </button>
-          ))}
+        {/* Phase 5 / UX redesign — live agent activity panel.
+            Sits above the tabs so users always see what their agent is doing,
+            even when they're on a different tab. */}
+        {!showSkeletons && (queue.length > 0 || stats?.applied > 0) && (
+          <div style={s.agentPanel}>
+            <AgentActivity queue={queue} stats={stats} />
+          </div>
+        )}
+
+        <div style={s.tabs} role="tablist" aria-label="Job sections">
+          {TABS.map((t, i) => {
+            const isActive = tab === t
+            const count = t === 'Applying'
+              ? queue.length
+              : t === 'Needs Review'
+                ? (stats?.unknown || 0)
+                : 0
+            return (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setTab(t)}
+                style={{ ...s.tab, ...(isActive ? s.tabActive : {}) }}
+              >
+                {t}
+                {count > 0 && (
+                  <span style={{
+                    background: isActive ? 'rgba(255,255,255,0.3)' : '#4F46E5',
+                    color: '#fff', fontSize: 11, fontWeight: 700,
+                    padding: '1px 7px', borderRadius: 20, minWidth: 18, textAlign: 'center',
+                  }}>{count}</span>
+                )}
+                {i < TABS.length - 1 && <span style={s.tabArrow}>›</span>}
+              </button>
+            )
+          })}
         </div>
 
-        {tab === 'Applying' ? (
+        {showSkeletons ? (
+          <div style={s.jobList}>
+            {[0, 1, 2, 3, 4].map(i => <JobCardSkeleton key={i} />)}
+          </div>
+        ) : tab === 'Needs Review' ? (
+          <NeedsReviewList
+            jobs={filteredJobs}
+            onConfirm={confirmApplied}
+            onRetry={retryApplication}
+            onClick={(j) => setSelectedJob(j)}
+          />
+        ) : tab === 'Applying' ? (
           <div style={s.jobList}>
             {queue.length === 0 ? (
               <div style={s.empty}>
@@ -580,6 +642,90 @@ function QueueSpinner() {
   )
 }
 
+/**
+ * NeedsReviewList — surfaces jobs the bot couldn't confirm landed.
+ *
+ * These rows USED to silently be marked 'applied' (and charge a credit) —
+ * we fixed that in Phase 1 / Phase 5. Now the user sees them honestly and
+ * can either confirm (charge credit) or retry (no charge until success).
+ */
+function NeedsReviewList({ jobs, onConfirm, onRetry, onClick }) {
+  if (jobs.length === 0) {
+    return (
+      <div style={s.empty}>
+        <div style={s.emptyIcon}>✓</div>
+        <div style={s.emptyTitle}>Nothing needs your review</div>
+        <div style={s.emptyText}>
+          When the bot can't confirm whether an application landed (CAPTCHA, silent block,
+          etc.), it'll show up here for you to verify or retry.
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={s.jobList}>
+      <div style={s.reviewIntro}>
+        <span style={s.reviewIconWrap} aria-hidden="true">⚠</span>
+        <div>
+          <div style={s.reviewHeading}>The bot couldn't confirm these landed.</div>
+          <div style={s.reviewSub}>
+            Open the job, check your email or the company's careers portal, then
+            <strong> mark as applied</strong> (0.4 credits) or <strong>retry</strong> (free).
+          </div>
+        </div>
+      </div>
+      {jobs.map(job => (
+        <ReviewCard
+          key={job.id}
+          job={job}
+          onConfirm={() => onConfirm(job.id)}
+          onRetry={() => onRetry(job.id)}
+          onClick={() => onClick(job)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ReviewCard({ job, onConfirm, onRetry, onClick }) {
+  return (
+    <div style={s.reviewCard} className="job-card-hover" onClick={onClick}>
+      <div style={s.reviewLeft}>
+        <div style={s.reviewBadge}>?</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={s.reviewTitle}>{job.title}</div>
+          <div style={s.reviewMeta}>
+            <span style={s.reviewCompany}>{job.company}</span>
+            {job.notes && (
+              <>
+                <span style={s.dot}>·</span>
+                <span style={s.reviewNote}>{job.notes}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={s.reviewActions} onClick={e => e.stopPropagation()}>
+        <a
+          href={job.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={s.reviewLink}
+          onClick={e => e.stopPropagation()}
+        >
+          Open posting ↗
+        </a>
+        <button style={s.reviewConfirmBtn} onClick={onConfirm}>
+          ✓ Mark applied
+        </button>
+        <button style={s.reviewRetryBtn} onClick={onRetry}>
+          ↺ Retry
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // Inject spin keyframes once
 if (typeof document !== 'undefined' && !document.getElementById('spin-style')) {
   const el = document.createElement('style')
@@ -694,4 +840,91 @@ const s = {
     boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
   },
   toggleThumbOn: { left: '18px', background: '#fff' },
+
+  // ─── Live agent activity panel (Phase 5 / UI redesign) ─────────────
+  agentPanel: {
+    marginBottom: 16,
+  },
+
+  // ─── Needs Review tab styles ───────────────────────────────────────
+  reviewIntro: {
+    display: 'flex',
+    gap: 12,
+    background: '#FFFBEB',
+    border: '1px solid #FCD34D',
+    borderRadius: 12,
+    padding: '14px 16px',
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+  reviewIconWrap: {
+    width: 28, height: 28,
+    flexShrink: 0,
+    background: '#FEF3C7',
+    borderRadius: 8,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 14, color: '#92400E', fontWeight: 700,
+  },
+  reviewHeading: { fontSize: 14, fontWeight: 700, color: '#92400E', marginBottom: 2 },
+  reviewSub:     { fontSize: 13, color: '#78350F', lineHeight: 1.45 },
+
+  reviewCard: {
+    background: 'rgba(255,255,255,0.82)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    borderRadius: 14,
+    border: '1px solid rgba(252, 211, 77, 0.4)',
+    marginBottom: 10,
+    padding: '14px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
+    cursor: 'pointer',
+    transition: 'box-shadow 0.18s, transform 0.18s, border-color 0.18s',
+  },
+  reviewLeft: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    flex: 1, minWidth: 0,
+  },
+  reviewBadge: {
+    width: 32, height: 32, borderRadius: 8,
+    background: '#FEF3C7',
+    color: '#92400E', fontWeight: 800, fontSize: 16,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+    border: '1px solid #FCD34D',
+  },
+  reviewTitle: {
+    fontSize: 15, fontWeight: 600, color: '#111',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  reviewMeta: {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6,
+    fontSize: 13, color: '#6b7280', marginTop: 4,
+  },
+  reviewCompany: { fontWeight: 600, color: '#4b5563' },
+  reviewNote: { color: '#92400E', fontSize: 12 },
+  reviewActions: {
+    display: 'flex', gap: 8, flexWrap: 'wrap',
+  },
+  reviewLink: {
+    fontSize: 12, padding: '7px 12px',
+    border: '1px solid #E5E7EB',
+    borderRadius: 8, color: '#4B5563',
+    fontWeight: 600, background: '#fff',
+  },
+  reviewConfirmBtn: {
+    fontSize: 12, padding: '7px 12px',
+    background: '#F0FDF4', color: '#16A34A',
+    border: '1px solid #BBF7D0', borderRadius: 8,
+    fontWeight: 700, cursor: 'pointer',
+  },
+  reviewRetryBtn: {
+    fontSize: 12, padding: '7px 12px',
+    background: '#FFFFFF', color: '#4F46E5',
+    border: '1px solid #C4B5FD', borderRadius: 8,
+    fontWeight: 700, cursor: 'pointer',
+  },
 }

@@ -180,6 +180,61 @@ input[type="range"] { accent-color: #7C3AED; }
 .fade-in-3 { animation: fadeInUp 0.35s 0.15s ease both; }
 .fade-in-4 { animation: fadeInUp 0.35s 0.20s ease both; }
 
+/* ── Skeleton shimmer ──────────────────────────────────────────────── */
+/* Pulled into the design system so every loading state looks consistent. */
+.skeleton-shimmer {
+  position: relative;
+  background: linear-gradient(110deg,
+    rgba(196, 181, 253, 0.20) 8%,
+    rgba(237, 233, 254, 0.55) 18%,
+    rgba(196, 181, 253, 0.20) 33%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Agent activity pulse ──────────────────────────────────────────── */
+@keyframes agentPulse {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  70%  { box-shadow: 0 0 0 10px transparent; opacity: 0.7; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
+/* ── Card interactive hover (used by Card variant="interactive") ───── */
+.card-interactive-hover {
+  cursor: pointer;
+}
+.card-interactive-hover:hover {
+  box-shadow: 0 8px 28px rgba(109, 40, 217, 0.18) !important;
+  transform: translateY(-2px);
+  border-color: rgba(167, 139, 250, 0.6) !important;
+}
+@media (max-width: 768px) {
+  .card-interactive-hover:hover { transform: none; }
+}
+
+/* ── Trust strip horizontal scroll (mobile) ───────────────────────── */
+.trust-strip-scroll {
+  scrollbar-width: none;
+}
+.trust-strip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Reduced-motion users get static UI ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  body::before, body::after,
+  #root::before, #root::after { animation: none !important; }
+}
+
 /* ── Mobile responsive ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
   /* Prevent horizontal scroll */

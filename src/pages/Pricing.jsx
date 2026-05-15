@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../api'
 import Navbar from '../components/Navbar'
+import Stat from '../ui/Stat'
+import TrustBadge from '../ui/TrustBadge'
+import usePublicStats from '../hooks/usePublicStats'
 
 const PACKAGES = [
   {
@@ -36,6 +39,7 @@ export default function Pricing() {
   const [loading, setLoading] = useState(null) // package id being purchased
   const [stats, setStats] = useState(null)
   const navigate = useNavigate()
+  const { stats: publicStats, loading: publicStatsLoading } = usePublicStats()
 
   useEffect(() => {
     api.get('/jobs/stats').then(r => {
@@ -89,13 +93,52 @@ export default function Pricing() {
         )}
 
         <div style={s.hero}>
-          <h1 style={s.heroTitle}>Get More Credits</h1>
-          <p style={s.heroSub}>Each successful application uses <strong>0.4 credits</strong>. New accounts start with 100 free credits.</p>
+          <div style={s.heroEyebrow}>Simple, honest pricing</div>
+          <h1 style={s.heroTitle}>
+            Pay only for <span style={s.heroAccent}>applications that land</span>
+          </h1>
+          <p style={s.heroSub}>
+            Each successful application uses <strong>0.4 credits</strong>. If the bot fails or
+            gets blocked, you're <strong>not charged</strong>. New accounts start with 100 free credits.
+          </p>
           {credits !== null && (
             <div style={s.balancePill}>
               ⚡ Your balance: <strong>{credits} credits</strong> ({Math.floor(credits / 0.4)} applications remaining)
             </div>
           )}
+
+          {/* Trust strip — visible to logged-in users above the pricing cards. */}
+          <div style={s.trustStrip}>
+            <TrustBadge icon="🔒" label="Stripe-secured checkout" tone="success" />
+            <TrustBadge icon="🛡️" label="No charge on bot failures" />
+            <TrustBadge icon="↺" label="Credits never expire" />
+            <TrustBadge icon="✉" label="7-day refund guarantee" />
+          </div>
+        </div>
+
+        {/* Real-time platform stats — quiet social proof. */}
+        <div style={s.publicStats}>
+          <Stat
+            value={publicStats?.applications_submitted}
+            label="Total applications submitted"
+            loading={publicStatsLoading || publicStats?.applications_submitted == null}
+            size="lg"
+          />
+          <div style={s.statDividerV} />
+          <Stat
+            value={publicStats?.applications_submitted_today}
+            label="Applications today"
+            loading={publicStatsLoading || publicStats?.applications_submitted_today == null}
+            size="lg"
+          />
+          <div style={s.statDividerV} />
+          <Stat
+            value={publicStats?.success_rate_7d_pct}
+            label="7-day success rate"
+            suffix={publicStats?.success_rate_7d_pct != null ? '%' : ''}
+            loading={publicStatsLoading || publicStats?.success_rate_7d_pct == null}
+            size="lg"
+          />
         </div>
 
         <div style={s.cards}>
@@ -144,13 +187,37 @@ export default function Pricing() {
 }
 
 const s = {
-  page: { minHeight: '100vh', background: '#F5F3FF' },
+  page: { minHeight: '100vh', background: 'transparent' },
   container: { maxWidth: '960px', margin: '0 auto', padding: '40px 16px 80px' },
   successBanner: { background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '14px 20px', borderRadius: '10px', marginBottom: '24px', fontWeight: '600', textAlign: 'center' },
-  hero: { textAlign: 'center', marginBottom: '48px' },
-  heroTitle: { fontSize: '36px', fontWeight: '800', color: '#111', marginBottom: '12px' },
-  heroSub: { fontSize: '16px', color: '#666', marginBottom: '20px' },
+  hero: { textAlign: 'center', marginBottom: '32px' },
+  heroEyebrow: {
+    display: 'inline-block', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
+    textTransform: 'uppercase', color: '#7C3AED',
+    background: '#EDE9FE', padding: '6px 14px',
+    borderRadius: 999, border: '1px solid #C4B5FD', marginBottom: 14,
+  },
+  heroTitle: { fontSize: '40px', fontWeight: '800', color: '#111', marginBottom: '14px', letterSpacing: '-0.02em', lineHeight: 1.12 },
+  heroAccent: {
+    background: 'linear-gradient(90deg, #7C3AED, #EC4899)',
+    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+  },
+  heroSub: { fontSize: '16px', color: '#666', marginBottom: '20px', maxWidth: 620, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.55 },
   balancePill: { display: 'inline-block', background: '#EDE9FE', color: '#5B21B6', padding: '10px 24px', borderRadius: '999px', fontSize: '15px', border: '1px solid #C4B5FD' },
+  trustStrip: {
+    display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+    gap: 10, marginTop: 22,
+  },
+  publicStats: {
+    display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+    background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+    border: '1px solid rgba(196,181,253,0.35)', borderRadius: 16,
+    padding: '24px 16px', marginBottom: 36,
+    flexWrap: 'wrap', gap: 16,
+  },
+  statDividerV: {
+    width: 1, height: 50, background: '#E5E7EB', alignSelf: 'center',
+  },
   cards: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '60px' },
   card: { background: '#fff', borderRadius: '16px', padding: '32px 24px', border: '1px solid #e8e5ff', display: 'flex', flexDirection: 'column', position: 'relative' },
   cardPopular: { border: '2px solid #4F46E5', boxShadow: '0 8px 32px rgba(79,70,229,0.15)' },

@@ -2,6 +2,7 @@ import { memo } from 'react'
 
 function JobCard({ job, onApply, applying, onClick, queueState }) {
   const isApplied = job.status === 'applied'
+  const isUnknown = job.status === 'unknown'  // Phase 5: needs review
   const inQueue = queueState?.status === 'queued'
   const isApplying = queueState?.status === 'applying' || applying === job.id
 
@@ -23,6 +24,9 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
   } else if (inQueue) {
     btnLabel = `#${queueState.queue_position} In Queue`
     btnStyle = { ...s.applyBtn, background: '#EDE9FE', color: '#6D28D9', border: '1px solid #C4B5FD' }
+  } else if (isUnknown) {
+    btnLabel = '⚠ Needs review'
+    btnStyle = { ...s.applyBtn, background: '#FFFBEB', color: '#92400E', border: '1px solid #FCD34D' }
   }
 
   return (
@@ -42,6 +46,8 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
               <span style={s.applyingPill}>⏳ Applying</span>
             ) : inQueue ? (
               <span style={s.queuedPill}>#{queueState.queue_position} Queued</span>
+            ) : isUnknown ? (
+              <span style={s.unknownPill}>⚠ Needs Review</span>
             ) : (
               <span style={s.newPill}>New</span>
             )}
@@ -103,6 +109,7 @@ export default memo(JobCard, (prev, next) => (
   prev.job?.id === next.job?.id
   && prev.job?.status === next.job?.status
   && prev.job?.score === next.job?.score
+  && prev.job?.notes === next.job?.notes
   && prev.applying === next.applying
   && prev.queueState?.status === next.queueState?.status
   && prev.queueState?.queue_position === next.queueState?.queue_position
@@ -137,6 +144,7 @@ const s = {
   appliedPill: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
   applyingPill: { fontSize: '12px', background: '#FEF3C7', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
   queuedPill: { fontSize: '12px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
+  unknownPill: { fontSize: '12px', background: '#FFFBEB', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '600', border: '1px solid #FCD34D' },
   dot: { color: '#ccc', fontSize: '12px' },
   metaText: { fontSize: '13px', color: '#888' },
   companyRow: { display: 'flex', alignItems: 'center', gap: '10px' },
