@@ -676,11 +676,16 @@ export default function Profile() {
             </div>
           )}
           <div style={s.card}>{renderSection()}</div>
-          <div style={s.saveRow}>
-            <button style={s.saveBtn} onClick={handleSaveAndRescore} disabled={saving}>
-              {saving ? 'Saving...' : '✓ Save & Rescore Jobs'}
-            </button>
-          </div>
+          {/* Hide the global Save button on Email Verification — that section
+              already has a single "Save & Test Connection" button that does
+              save + test in one click. Two buttons there was confusing. */}
+          {activeSection !== 'Email Verification' && (
+            <div style={s.saveRow}>
+              <button style={s.saveBtn} onClick={handleSaveAndRescore} disabled={saving}>
+                {saving ? 'Saving...' : '✓ Save & Rescore Jobs'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
