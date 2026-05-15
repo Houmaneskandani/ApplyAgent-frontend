@@ -36,7 +36,7 @@ export default function ForgotPassword() {
             <p style={styles.success}>
               If an account exists for <strong>{email}</strong>, a 6-digit reset code has been sent.
             </p>
-            <p style={styles.hint}>Check your terminal (until Twilio is configured).</p>
+            <p style={styles.hint}>Check your email — it may take a minute to arrive.</p>
             <Link to={`/reset-password?email=${encodeURIComponent(email)}`} style={styles.button}>
               Enter reset code
             </Link>

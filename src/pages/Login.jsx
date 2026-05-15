@@ -1,8 +1,19 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import api from '../api'
 import ApplyAgentLogo from '../components/Logo'
 import useIsMobile from '../hooks/useIsMobile'
+
+// Whitelist what's allowed in the `next` redirect — we MUST NOT allow an
+// open redirect to an external URL after login (phishing risk).
+function safeNext(raw) {
+  if (!raw) return '/dashboard'
+  // Only allow same-origin paths.
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/dashboard'
+  // Block paths starting with the login routes themselves.
+  if (/^\/(login|signup|forgot-password|reset-password)/.test(raw)) return '/dashboard'
+  return raw
+}
 
 export default function Login() {
   const isMobile = useIsMobile()
@@ -11,6 +22,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -20,9 +32,15 @@ export default function Login() {
       const res = await api.post('/auth/login', { email, password })
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('name', res.data.name)
-      navigate('/dashboard')
+      navigate(safeNext(searchParams.get('next')))
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
+      // Handle slowapi 429 (rate limit) specifically — friendly message.
+      const status = err.response?.status
+      if (status === 429) {
+        setError('Too many login attempts. Please wait a minute and try again.')
+      } else {
+        setError(err.response?.data?.detail || 'Login failed')
+      }
     } finally {
       setLoading(false)
     }

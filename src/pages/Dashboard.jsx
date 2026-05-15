@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../api'
 import Navbar from '../components/Navbar'
 import JobCard from '../components/JobCard'
@@ -138,7 +139,7 @@ export default function Dashboard() {
         // Just added — no alert needed, UI shows position
       }
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to queue application')
+      toast.error(err.response?.data?.detail || 'Failed to queue application')
     } finally {
       setApplying(null)
     }
@@ -159,7 +160,7 @@ export default function Dashboard() {
         setTimeout(() => api.get('/queue/').then(r => setQueue(r.data)).catch(() => {}), 2000)
       }
     } catch (err) {
-      alert(err.response?.data?.detail || 'Could not toggle Auto Apply')
+      toast.error(err.response?.data?.detail || 'Could not toggle Auto Apply')
     } finally {
       setTogglingAuto(false)
     }
@@ -170,7 +171,7 @@ export default function Dashboard() {
       await api.delete(`/queue/${jobId}`)
       setQueue(prev => prev.filter(q => q.job_id !== jobId))
     } catch (err) {
-      alert(err.response?.data?.detail || 'Could not cancel')
+      toast.error(err.response?.data?.detail || 'Could not cancel')
     }
   }
 

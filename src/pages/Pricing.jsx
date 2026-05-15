@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../api'
 import Navbar from '../components/Navbar'
 
@@ -53,14 +54,23 @@ export default function Pricing() {
     setLoading(pkgId)
     try {
       const res = await api.post(`/credits/checkout/${pkgId}`)
-      window.location.href = res.data.checkout_url
-    } catch (err) {
-      const msg = err.response?.data?.detail || 'Payment setup failed'
-      if (msg.includes('not configured')) {
-        alert('Payments are not configured yet. Add your STRIPE_SECRET_KEY to the backend .env file.')
+      const url = res.data?.checkout_url
+      // SECURITY: only allow redirects to the real Stripe checkout host.
+      // An open-redirect via a compromised backend would otherwise let an
+      // attacker bounce paying users to a phishing page.
+      if (typeof url === 'string' && /^https:\/\/checkout\.stripe\.com\//.test(url)) {
+        window.location.href = url
       } else {
-        alert(msg)
+        toast.error('Could not start checkout. Please try again later.')
+        setLoading(null)
       }
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      // Never surface backend env-var instructions to end users.
+      const userMsg = (typeof detail === 'string' && !detail.toLowerCase().includes('stripe_'))
+        ? detail
+        : 'Payments are temporarily unavailable. Please try again later.'
+      toast.error(userMsg)
       setLoading(null)
     }
   }

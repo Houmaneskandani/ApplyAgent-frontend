@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import DOMPurify from 'dompurify'
 import api from '../api'
 import useIsMobile from '../hooks/useIsMobile'
 
@@ -10,6 +11,36 @@ function decodeEntities(str) {
   return txt.value
 }
 
+// SECURITY: scraped job descriptions are untrusted HTML — a malicious posting
+// could inject <img src=x onerror="fetch('/exfil', {headers:{Authorization:localStorage.token}})">
+// and exfiltrate the user's JWT. Whitelist only the formatting tags we need
+// and strip every event handler, <script>, <iframe>, <object>, etc.
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'hr',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'strong', 'b', 'em', 'i', 'u', 'mark', 'small',
+    'ul', 'ol', 'li',
+    'a', 'span', 'div',
+    'blockquote', 'code', 'pre',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  ],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'title'],
+  ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+  FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'input'],
+  FORBID_ATTR: ['style', 'onerror', 'onload', 'onclick', 'onmouseover'],
+}
+
+function sanitizeDescription(html) {
+  if (!html) return ''
+  const clean = DOMPurify.sanitize(html, SANITIZE_CONFIG)
+  // Force external links to open safely.
+  return clean.replace(
+    /<a\s+([^>]*?)href=/gi,
+    '<a target="_blank" rel="noopener noreferrer nofollow" $1href=',
+  )
+}
+
 export default function JobDetail({ job, onClose, onApply, applying }) {
   const isMobile = useIsMobile()
   const [description, setDescription] = useState(null)
@@ -17,11 +48,23 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
   useEffect(() => {
     if (!job) return
     setDescription(null)
-    api.get(`/jobs/${job.id}`).then(res => {
+    const controller = new AbortController()
+    api.get(`/jobs/${job.id}`, { signal: controller.signal }).then(res => {
       const raw = res.data.description || ''
       setDescription(decodeEntities(raw))
-    }).catch(err => { console.error('JobDetail fetch failed:', err.response?.status, err.message); setDescription('') })
+    }).catch(err => {
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return
+      console.error('JobDetail fetch failed:', err.response?.status, err.message)
+      setDescription('')
+    })
+    return () => controller.abort()
   }, [job?.id])
+
+  // Sanitize once per description change — never on every render.
+  const safeDescription = useMemo(
+    () => (description ? sanitizeDescription(description) : ''),
+    [description],
+  )
 
   if (!job) return null
 
@@ -129,8 +172,8 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
           <div style={s.section}>
             <h3 style={s.sectionTitle}>Description</h3>
             {description === null && <p style={s.loadingDesc}>Loading...</p>}
-            {description !== null && description !== '' && (
-              <div className="job-description" dangerouslySetInnerHTML={{ __html: description }} />
+            {description !== null && safeDescription !== '' && (
+              <div className="job-description" dangerouslySetInnerHTML={{ __html: safeDescription }} />
             )}
             {description === '' && (
               <div style={s.noDesc}>
