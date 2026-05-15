@@ -662,7 +662,41 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* New: search + quick-filter / quick-sort bar (Job Matches only).
+        {/* Lifecycle tabs sit FIRST — they're the primary navigation between
+            the four states of an application. The search + filter chips
+            below them only show on Job Matches because filtering doesn't
+            make sense in Applying / Needs Review / Applied. */}
+        <div style={s.tabs} role="tablist" aria-label="Job sections">
+          {TABS.map((t, i) => {
+            const isActive = tab === t
+            const count = t === 'Applying'
+              ? queue.length
+              : t === 'Needs Review'
+                ? (stats?.unknown || 0)
+                : 0
+            return (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setTab(t)}
+                style={{ ...s.tab, ...(isActive ? s.tabActive : {}) }}
+              >
+                {t}
+                {count > 0 && (
+                  <span style={{
+                    background: isActive ? 'rgba(255,255,255,0.3)' : '#4F46E5',
+                    color: '#fff', fontSize: 11, fontWeight: 700,
+                    padding: '1px 7px', borderRadius: 20, minWidth: 18, textAlign: 'center',
+                  }}>{count}</span>
+                )}
+                {i < TABS.length - 1 && <span style={s.tabArrow}>›</span>}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Search + quick-filter / quick-sort bar (Job Matches only).
             Inspired by Indeed/LinkedIn — instant search and one-tap toggles
             for the things users actually filter by 90% of the time. The
             FilterPanel button is still here for everything else. */}
@@ -761,36 +795,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        <div style={s.tabs} role="tablist" aria-label="Job sections">
-          {TABS.map((t, i) => {
-            const isActive = tab === t
-            const count = t === 'Applying'
-              ? queue.length
-              : t === 'Needs Review'
-                ? (stats?.unknown || 0)
-                : 0
-            return (
-              <button
-                key={t}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setTab(t)}
-                style={{ ...s.tab, ...(isActive ? s.tabActive : {}) }}
-              >
-                {t}
-                {count > 0 && (
-                  <span style={{
-                    background: isActive ? 'rgba(255,255,255,0.3)' : '#4F46E5',
-                    color: '#fff', fontSize: 11, fontWeight: 700,
-                    padding: '1px 7px', borderRadius: 20, minWidth: 18, textAlign: 'center',
-                  }}>{count}</span>
-                )}
-                {i < TABS.length - 1 && <span style={s.tabArrow}>›</span>}
-              </button>
-            )
-          })}
-        </div>
 
         {showSkeletons ? (
           <div style={s.jobList}>
