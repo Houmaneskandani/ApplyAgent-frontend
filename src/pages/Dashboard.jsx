@@ -83,16 +83,56 @@ export default function Dashboard() {
     return () => clearInterval(queuePollRef.current)
   }, [hasApplying])
 
+  // Onboarding checklist state. Three concrete steps the user needs to
+  // complete before applies will work well:
+  //   1. Upload resume   — the matcher and form-filler both need it
+  //   2. Fill profile    — name + phone are required by most ATS forms
+  //   3. Enable IMAP     — Greenhouse + Lever email-verification flows
+  //                        depend on this; without it, verification-code
+  //                        prompts time out and the apply fails.
+  // We derive this from GET /profile/ (which now returns `imap_pass_set`
+  // as a boolean — the cleartext password never leaves the server).
+  const [onboardingSteps, setOnboardingSteps] = useState([])
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('onboarding_dismissed') === '1',
+  )
+  const dismissOnboarding = () => {
+    try { localStorage.setItem('onboarding_dismissed', '1') } catch {}
+    setOnboardingDismissed(true)
+  }
+
   useEffect(() => {
     api.get('/profile/').then(res => {
       const p = res.data
       const prefs = p.preferences || {}
+      // Keep the legacy `missingFields`/`profileStatus` state for any
+      // call sites that still reference them; the banner uses the new
+      // `onboardingSteps` array.
       const missing = []
       if (!p.name?.trim()) missing.push('Full name')
       if (!prefs.phone?.trim()) missing.push('Phone number')
       if (!p.resume_url) missing.push('Resume')
       setMissingFields(missing)
       setProfileStatus(missing.length > 0 ? 'incomplete' : 'ok')
+
+      // Build the structured checklist.
+      setOnboardingSteps([
+        {
+          key: 'resume',
+          label: 'Upload resume',
+          done: !!p.resume_url,
+        },
+        {
+          key: 'profile',
+          label: 'Fill profile basics',
+          done: !!(p.name && p.name.trim()) && !!(prefs.phone && prefs.phone.trim()),
+        },
+        {
+          key: 'imap',
+          label: 'Enable email verification',
+          done: !!prefs.imap_pass_set && !!(prefs.imap_user && prefs.imap_user.trim()),
+        },
+      ])
     }).catch(() => setProfileStatus('ok'))
   }, [])
 
@@ -500,14 +540,39 @@ export default function Dashboard() {
     <div style={s.page}>
       <Navbar credits={stats?.credits || 0} />
 
-      {profileStatus === 'incomplete' && (
+      {/* Onboarding checklist — shows until all 3 steps are done or the
+          user dismisses. Each step links to /profile so they can fix it. */}
+      {!onboardingDismissed
+        && onboardingSteps.length > 0
+        && onboardingSteps.some(step => !step.done) && (
         <div style={s.onboardBanner}>
-          <span style={s.onboardIcon}>👋</span>
-          <div>
-            <strong>Complete your profile to start applying</strong>
-            <span style={s.onboardMissing}> — missing: {missingFields.join(', ')}</span>
+          <span style={s.onboardIcon}>🚀</span>
+          <strong style={s.onboardTitle}>Get started:</strong>
+          <div style={s.onboardSteps}>
+            {onboardingSteps.map(step => (
+              <a
+                key={step.key}
+                href="/profile"
+                style={{
+                  ...s.onboardStep,
+                  ...(step.done ? s.onboardStepDone : s.onboardStepPending),
+                }}
+                aria-label={step.done ? `${step.label} — done` : `${step.label} — incomplete, click to go to profile`}
+              >
+                <span style={s.onboardStepIcon}>{step.done ? '✓' : '○'}</span>
+                {step.label}
+              </a>
+            ))}
           </div>
-          <a href="/profile" style={s.onboardBtn}>Go to Profile →</a>
+          <button
+            type="button"
+            onClick={dismissOnboarding}
+            style={s.onboardDismiss}
+            aria-label="Dismiss onboarding checklist"
+            title="Hide this banner"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -1171,18 +1236,52 @@ const s = {
   emptyTitle: { fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#111' },
   emptyText: { fontSize: '14px', color: '#888', marginBottom: '20px' },
   emptyBtn: { background: 'linear-gradient(135deg, #9333ea, #6d28d9)', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 3px 10px rgba(109,40,217,0.3)' },
+  // Onboarding checklist — brand-tinted (purple-soft) instead of the old
+  // amber warning. A friendly "let's set you up" tone, not "you have an
+  // error". Lives at the very top of the page above the hero.
   onboardBanner: {
-    background: '#FEF3C7', borderBottom: '1px solid #FCD34D',
-    padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '12px',
-    fontSize: '14px', color: '#92400E',
+    background: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
+    borderBottom: '1px solid #DDD6FE',
+    padding: '12px 28px', display: 'flex', alignItems: 'center',
+    gap: '14px', fontSize: '14px', color: '#1E1B4B',
+    flexWrap: 'wrap',
   },
   onboardIcon: { fontSize: '20px', flexShrink: 0 },
-  onboardMissing: { color: '#B45309', fontWeight: '500' },
-  onboardBtn: {
-    marginLeft: 'auto', background: '#D97706', color: '#fff',
-    padding: '7px 16px', borderRadius: '8px', fontSize: '13px',
-    fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+  onboardTitle: { fontSize: '14px', fontWeight: 700, color: '#1E1B4B', flexShrink: 0 },
+  onboardSteps: {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    flexWrap: 'wrap', flex: 1,
   },
+  onboardStep: {
+    display: 'inline-flex', alignItems: 'center', gap: '6px',
+    padding: '6px 12px', borderRadius: '999px',
+    fontSize: '13px', fontWeight: 600,
+    textDecoration: 'none', whiteSpace: 'nowrap',
+    transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+  },
+  onboardStepPending: {
+    background: '#FFFFFF',
+    color: '#5B21B6',
+    border: '1px solid #C4B5FD',
+    boxShadow: '0 1px 2px rgba(79, 70, 229, 0.08)',
+  },
+  onboardStepDone: {
+    background: '#F0FDF4',
+    color: '#15803d',
+    border: '1px solid #BBF7D0',
+    cursor: 'default',
+  },
+  onboardStepIcon: { fontSize: '14px', fontWeight: 800, flexShrink: 0 },
+  onboardDismiss: {
+    marginLeft: 'auto', background: 'transparent', border: 'none',
+    color: '#6B7280', fontSize: '22px', lineHeight: 1, padding: '0 4px',
+    cursor: 'pointer', borderRadius: '6px', flexShrink: 0,
+  },
+  // Legacy alias kept so any stale reference doesn't crash. The new
+  // checklist banner above replaces both `onboardMissing` and the
+  // old single-link `onboardBtn`.
+  onboardMissing: { display: 'none' },
+  onboardBtn: { display: 'none' },
   queueCard: {
     background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
     borderRadius: '14px', border: '1px solid rgba(196,181,253,0.35)',
