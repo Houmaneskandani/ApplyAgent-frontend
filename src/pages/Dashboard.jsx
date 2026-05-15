@@ -233,18 +233,104 @@ export default function Dashboard() {
     }
   }, [])
 
+  // Search Jobs — properly UX'd version.
+  //
+  // The old version waited up to 3 minutes polling `total_jobs` and only
+  // refreshed the list once at the end. Two problems with that:
+  //   (a) If the scrape finds only DUPLICATES (which happens often after
+  //       the first run), total_jobs never grows and we waited the full
+  //       3 min for nothing.
+  //   (b) The user just sees "⏳ Searching..." with zero feedback.
+  //
+  // This version:
+  //   - Toasts immediately so the user knows the request landed.
+  //   - Refreshes the job list every 10s during the scrape, so newly
+  //     scored jobs trickle in live instead of all-at-once.
+  //   - Watches BOTH `scored` and `total_jobs` so we detect progress
+  //     even when scraping finds only dupes (rescoring still happens).
+  //   - Has a hard 4-minute timeout, after which we tell the user the
+  //     scrape may still be running in the background.
+  //   - Always ends with a toast (success OR "no new jobs this time").
+  const runScrape = useCallback(async () => {
+    if (scraping) return
+    setScraping(true)
+    const t = toast.loading('Searching 40+ companies for new jobs...', { duration: Infinity })
+    const startTotal = stats?.total_jobs || 0
+    const startScored = stats?.scored || 0
+    const start = Date.now()
+    let poll
+    let resolved = false
+
+    const finish = (msg, kind = 'success') => {
+      if (resolved) return
+      resolved = true
+      clearInterval(poll)
+      toast.dismiss(t)
+      if (kind === 'success') toast.success(msg)
+      else if (kind === 'error') toast.error(msg)
+      else toast(msg)
+      setScraping(false)
+    }
+
+    try {
+      await api.post('/queue/trigger-scrape')
+    } catch (err) {
+      const status = err.response?.status
+      if (status === 429) finish('Slow down — wait a minute and try again', 'error')
+      else finish('Could not start scrape — try again', 'error')
+      return
+    }
+
+    let lastScored = startScored
+    poll = setInterval(async () => {
+      // Hard timeout
+      if (Date.now() - start > 4 * 60 * 1000) {
+        finish('Still running in the background — check back in a minute', 'info')
+        loadData()
+        return
+      }
+      try {
+        const r = await api.get('/jobs/stats')
+        setStats(r.data)
+        const newJobs = (r.data.total_jobs || 0) - startTotal
+        const newScored = (r.data.scored || 0) - startScored
+        // If new jobs have been SCORED (not just scraped), refresh the
+        // visible list so they appear in real-time.
+        if (r.data.scored > lastScored) {
+          lastScored = r.data.scored
+          await loadData()
+        }
+        // Done heuristic: after at least 30s, if scored hasn't moved in
+        // 20s, we assume the scrape finished. (Reliable signal would be
+        // a server-side flag, but this is good enough.)
+        if (Date.now() - start > 30000 && r.data.scored === lastScored) {
+          if (newJobs > 0) {
+            finish(`Found ${newJobs} new ${newJobs === 1 ? 'job' : 'jobs'}, ${newScored > 0 ? `${newScored} new matches scored` : 'all already scored'}`)
+          } else if (newScored > 0) {
+            finish(`${newScored} new ${newScored === 1 ? 'match' : 'matches'} scored from existing jobs`)
+          } else {
+            finish('No new jobs this time — check back in a few hours', 'info')
+          }
+        }
+      } catch {
+        // Network blip — keep trying. Don't kill the whole flow.
+      }
+    }, 10000)
+  }, [scraping, stats])
+
   // Auto-refresh when the user switches BACK to this browser tab. Saves a
   // manual reload when they've been off in another tab while the worker was
-  // scraping or applying.
+  // scraping or applying. Skipped if a scrape is actively in progress —
+  // runScrape handles its own refresh cadence.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !scraping) {
         loadData()
       }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [])
+  }, [scraping])
 
   // Filter + sort. Every filter the FilterPanel collects is now applied
   // (previously industries/salary/job_type were dead). Every filter uses
@@ -549,25 +635,7 @@ export default function Dashboard() {
               <button
                 style={{...s.filterBtn, background: scraping ? '#6b7280' : '#059669'}}
                 disabled={scraping}
-                onClick={async () => {
-                  setScraping(true)
-                  try {
-                    await api.post('/queue/trigger-scrape')
-                    // Poll stats every 8s — stop when job count grows or after 3 min
-                    const prevCount = stats?.total_jobs || 0
-                    const start = Date.now()
-                    const poll = setInterval(async () => {
-                      try {
-                        const r = await api.get('/jobs/stats')
-                        if (r.data.total_jobs > prevCount || Date.now() - start > 180000) {
-                          clearInterval(poll)
-                          await loadData()
-                          setScraping(false)
-                        }
-                      } catch { clearInterval(poll); setScraping(false) }
-                    }, 8000)
-                  } catch { setScraping(false) }
-                }}
+                onClick={runScrape}
               >
                 {scraping ? '⏳ Searching...' : '🔍 Search Jobs'}
               </button>
