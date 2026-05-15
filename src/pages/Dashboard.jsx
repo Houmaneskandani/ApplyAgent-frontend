@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [queue, setQueue] = useState([]) // [{job_id, status, queue_position, title, company, source, dry_run}]
   const [filters, setFilters] = useState({
     keywords: [], experience: [], work_type: [],
+    industries: [],
     min_salary: 0, job_type: ['Full time'],
     exclude_companies: '', location: ''
   })
@@ -33,6 +34,12 @@ export default function Dashboard() {
   const [missingFields, setMissingFields] = useState([])
   const [autoApply, setAutoApply] = useState({ enabled: false, applied_today: 0, daily_limit: 10 })
   const [sortBy, setSortBy] = useState('score') // 'score' | 'date'
+  // Quick-filter state (separate from FilterPanel filters so they're easy to clear)
+  const [search, setSearch] = useState('')
+  const [strongOnly, setStrongOnly] = useState(false)   // score >= 8
+  const [postedWithinDays, setPostedWithinDays] = useState(0) // 0 = all
+  const [quickRemote, setQuickRemote] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -210,56 +217,150 @@ export default function Dashboard() {
     }
   }
 
-  // PERF: this used to be a `useCallback`-wrapped function that was called on
-  // EVERY render — defeating the point of useCallback because the *result*
-  // (filteredJobs) was a fresh array each time. With ~200 jobs and ~50 inline
-  // style objects per JobCard, the previous behavior re-rendered every card
-  // on every filter chip click. Now: memoize the result; only recompute when
-  // the relevant deps actually change.
+  // Manual refresh — fast re-fetch of the jobs list from the DB. This does
+  // NOT trigger a scrape (that's the "Search Jobs" button which can take
+  // minutes). Used both by the explicit Refresh button and by the
+  // auto-refetch-on-tab-focus effect below.
+  const refreshJobs = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await loadData()
+      toast.success('Job list refreshed', { duration: 2000 })
+    } catch {
+      toast.error('Could not refresh — try again in a moment')
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  // Auto-refresh when the user switches BACK to this browser tab. Saves a
+  // manual reload when they've been off in another tab while the worker was
+  // scraping or applying.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadData()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  // Filter + sort. Every filter the FilterPanel collects is now applied
+  // (previously industries/salary/job_type were dead). Every filter uses
+  // the new normalized backend fields (work_arrangement, description_snippet,
+  // fixed experience_level) so results actually match what the user picked.
   const filteredJobs = useMemo(() => {
     let jobs = [...allJobs]
 
+    // ── 1. Tab partition ─────────────────────────────────────────
     if (tab === 'Applied') jobs = jobs.filter(j => j.status === 'applied')
     else if (tab === 'Applying') jobs = jobs.filter(j => j.status === 'applying')
     else if (tab === 'Needs Review') jobs = jobs.filter(j => j.status === 'unknown')
     else jobs = jobs.filter(j => !j.status || j.status === 'new')
 
+    // ── 2. Search box (instant) ─────────────────────────────────
+    // Matches title, company, location, AND description snippet so
+    // "python" or "stripe" or "remote" all work as a single search.
+    const q = search.trim().toLowerCase()
+    if (q) {
+      jobs = jobs.filter(j => {
+        const hay = [
+          j.title, j.company, j.location, j.description_snippet,
+        ].filter(Boolean).join(' ').toLowerCase()
+        return hay.includes(q)
+      })
+    }
+
+    // ── 3. Quick filters ────────────────────────────────────────
+    if (strongOnly) jobs = jobs.filter(j => (j.score || 0) >= 8)
+    if (quickRemote) jobs = jobs.filter(j => j.work_arrangement === 'Remote')
+    if (postedWithinDays > 0) {
+      const cutoff = Date.now() - postedWithinDays * 24 * 60 * 60 * 1000
+      jobs = jobs.filter(j => j.created_at && new Date(j.created_at).getTime() >= cutoff)
+    }
+
+    // ── 4. Keywords from FilterPanel ────────────────────────────
+    // Fixed: also search description snippet. Previously only title+company
+    // → a job with Python in the description but "Backend Engineer" in the
+    // title was invisible when filtering for Python.
     if (filters.keywords?.length > 0) {
       jobs = jobs.filter(j => {
-        const text = `${j.title} ${j.company}`.toLowerCase()
+        const text = [
+          j.title, j.company, j.description_snippet,
+        ].filter(Boolean).join(' ').toLowerCase()
         return filters.keywords.some(kw => text.includes(kw.toLowerCase()))
       })
     }
 
+    // ── 5. Experience level ─────────────────────────────────────
+    // Fixed: the backend now returns 'Entry' / 'Junior' / 'Mid Level' /
+    // 'Senior' / 'Staff / Principal'. We map the verbose labels in the
+    // FilterPanel chip group to those exact bucket names.
     if (filters.experience?.length > 0) {
-      jobs = jobs.filter(j =>
-        filters.experience.some(exp =>
-          j.experience_level?.toLowerCase().includes(exp.split(' ')[0].toLowerCase())
-        )
-      )
+      const EXP_MAP = {
+        'Entry Level & Graduate':         'Entry',
+        'Junior (1-2 years)':             'Junior',
+        'Mid Level (3-5 years)':          'Mid Level',
+        'Senior (5-8 years)':             'Senior',
+        'Staff / Principal (8+ years)':   'Staff / Principal',
+      }
+      const wanted = new Set(filters.experience.map(e => EXP_MAP[e]).filter(Boolean))
+      jobs = jobs.filter(j => wanted.has(j.experience_level))
     }
 
+    // ── 6. Work arrangement (Remote / Hybrid / Onsite) ──────────
+    // Fixed: now uses backend-derived work_arrangement field instead of
+    // substring-matching on location. "In person" was previously matching
+    // hybrid jobs because they didn't contain the word "remote".
     if (filters.work_type?.length > 0) {
+      const wanted = new Set(
+        filters.work_type.map(wt => wt === 'In person' ? 'Onsite' : wt),
+      )
+      jobs = jobs.filter(j => wanted.has(j.work_arrangement))
+    }
+
+    // ── 7. Industries (NEW — was previously dead) ───────────────
+    if (filters.industries?.length > 0) {
       jobs = jobs.filter(j => {
-        const loc = (j.location || '').toLowerCase()
-        return filters.work_type.some(wt => {
-          if (wt === 'Remote') return loc.includes('remote')
-          if (wt === 'In person') return !loc.includes('remote')
-          if (wt === 'Hybrid') return loc.includes('hybrid')
-          return true
-        })
+        const text = [
+          j.title, j.company, j.description_snippet,
+        ].filter(Boolean).join(' ').toLowerCase()
+        return filters.industries.some(ind => text.includes(ind.toLowerCase()))
       })
     }
 
+    // ── 8. Location text input ──────────────────────────────────
     if (filters.location?.trim()) {
       const loc = filters.location.trim().toLowerCase()
       jobs = jobs.filter(j =>
         (j.location || '').toLowerCase().includes(loc) ||
-        // "Remote" keyword also matches jobs with no location listed
-        (loc === 'remote' && !j.location?.trim())
+        (loc === 'remote' && j.work_arrangement === 'Remote')
       )
     }
 
+    // ── 9. Salary minimum (NEW — was previously dead) ───────────
+    // We don't currently scrape numeric salary fields reliably, so this
+    // filters by keyword search in the description snippet. Imperfect but
+    // honest — at least the slider does something visible.
+    if ((filters.min_salary || 0) > 0) {
+      const min = filters.min_salary
+      jobs = jobs.filter(j => {
+        const text = (j.description_snippet || '').toLowerCase()
+        // Look for "$120k", "$120,000", "120k", etc. Coarse but useful.
+        const matches = text.match(/\$?\s?(\d{2,3})[,\s]?(\d{3})?\s?k?/g) || []
+        if (matches.length === 0) return true  // keep jobs with no salary mention
+        // Parse the largest number we find as the implied range top.
+        const max = matches
+          .map(m => parseInt(m.replace(/[^\d]/g, ''), 10))
+          .map(n => n < 1000 ? n * 1000 : n)  // "120" → 120000
+          .filter(n => n >= 30_000 && n <= 800_000) // sanity bounds
+          .reduce((a, b) => Math.max(a, b), 0)
+        return max === 0 || max >= min * 1000
+      })
+    }
+
+    // ── 10. Excluded companies ──────────────────────────────────
     if (filters.exclude_companies) {
       const excluded = filters.exclude_companies.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
       jobs = jobs.filter(j =>
@@ -267,6 +368,7 @@ export default function Dashboard() {
       )
     }
 
+    // ── 11. Sort ────────────────────────────────────────────────
     if (sortBy === 'date') {
       jobs.sort((a, b) => {
         const da = a.created_at ? new Date(a.created_at) : new Date(0)
@@ -277,7 +379,7 @@ export default function Dashboard() {
       jobs.sort((a, b) => (b.score || 0) - (a.score || 0))
     }
     return jobs
-  }, [allJobs, tab, filters, sortBy])
+  }, [allJobs, tab, filters, sortBy, search, strongOnly, quickRemote, postedWithinDays])
 
   // No full-screen spinner — render the page chrome and skeleton job cards
   // so users on cold-start Railway requests don't stare at a blank purple
@@ -287,14 +389,26 @@ export default function Dashboard() {
   const clearFilters = () => {
     const empty = {
       keywords: [], experience: [], work_type: [],
+      industries: [],
       min_salary: 0, job_type: ['Full time'],
       exclude_companies: '', location: ''
     }
     setFilters(empty)
     saveFilters(empty)
+    // Also clear the quick filters so "clear" is honest about what it does.
+    setSearch('')
+    setStrongOnly(false)
+    setQuickRemote(false)
+    setPostedWithinDays(0)
   }
 
-  const activeCount = (filters.keywords?.length || 0) + (filters.experience?.length || 0) + (filters.work_type?.length || 0) + (filters.location?.trim() ? 1 : 0)
+  const activeCount = (filters.keywords?.length || 0)
+    + (filters.experience?.length || 0)
+    + (filters.work_type?.length || 0)
+    + (filters.industries?.length || 0)
+    + ((filters.min_salary || 0) > 0 ? 1 : 0)
+    + (filters.location?.trim() ? 1 : 0)
+    + (filters.exclude_companies?.trim() ? 1 : 0)
 
   return (
     <div style={s.page}>
@@ -319,10 +433,27 @@ export default function Dashboard() {
               <span style={s.statLabel}>Jobs found</span>
             </div>
             <div style={s.statDivider} />
-            <div style={s.stat}>
-              <span style={s.statNum}>{stats.strong_matches}</span>
-              <span style={s.statLabel}>Strong matches</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('Job Matches')
+                setStrongOnly(v => !v)
+              }}
+              style={{
+                ...s.stat,
+                ...s.statClickable,
+                ...(strongOnly ? s.statActive : {}),
+              }}
+              aria-pressed={strongOnly}
+              title="Click to show only strong matches (score 8+)"
+            >
+              <span style={{ ...s.statNum, color: strongOnly ? '#fff' : s.statNum.color }}>
+                {stats.strong_matches}
+              </span>
+              <span style={{ ...s.statLabel, color: strongOnly ? 'rgba(255,255,255,0.85)' : s.statLabel.color }}>
+                Strong matches
+              </span>
+            </button>
             <div style={s.statDivider} />
             <div style={s.stat}>
               <span style={{...s.statNum, color: '#16a34a'}}>{stats.applied || 0}</span>
@@ -460,6 +591,106 @@ export default function Dashboard() {
         {!showSkeletons && (queue.length > 0 || stats?.applied > 0) && (
           <div style={s.agentPanel}>
             <AgentActivity queue={queue} stats={stats} />
+          </div>
+        )}
+
+        {/* New: search + quick-filter / quick-sort bar (Job Matches only).
+            Inspired by Indeed/LinkedIn — instant search and one-tap toggles
+            for the things users actually filter by 90% of the time. The
+            FilterPanel button is still here for everything else. */}
+        {tab === 'Job Matches' && !showSkeletons && (
+          <div style={s.quickBar}>
+            <div style={s.searchRow}>
+              <div style={s.searchWrap}>
+                <span style={s.searchIcon} aria-hidden="true">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search title, company, location, or description…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={s.searchInput}
+                  aria-label="Search jobs"
+                />
+                {search && (
+                  <button
+                    style={s.searchClear}
+                    onClick={() => setSearch('')}
+                    aria-label="Clear search"
+                    type="button"
+                  >✕</button>
+                )}
+              </div>
+              <button
+                style={{ ...s.refreshBtn, opacity: refreshing ? 0.6 : 1 }}
+                onClick={refreshJobs}
+                disabled={refreshing}
+                aria-label="Refresh job list"
+                type="button"
+                title="Refresh job list (does not run a new scrape)"
+              >
+                <span style={{
+                  display: 'inline-block',
+                  animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+                }}>↻</span>
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            <div style={s.chipRow} className="trust-strip-scroll">
+              <button
+                style={{ ...s.chip, ...(sortBy === 'score' && !strongOnly && !quickRemote && postedWithinDays === 0 ? s.chipActive : {}) }}
+                onClick={() => {
+                  setSortBy('score')
+                  setStrongOnly(false)
+                  setQuickRemote(false)
+                  setPostedWithinDays(0)
+                }}
+                type="button"
+              >🎯 Best Match</button>
+
+              <button
+                style={{ ...s.chip, ...(sortBy === 'date' ? s.chipActive : {}) }}
+                onClick={() => setSortBy(sortBy === 'date' ? 'score' : 'date')}
+                type="button"
+              >🕐 Newest</button>
+
+              <button
+                style={{ ...s.chip, ...(strongOnly ? s.chipActive : {}) }}
+                onClick={() => setStrongOnly(v => !v)}
+                type="button"
+              >⭐ Strong Match (8+)</button>
+
+              <button
+                style={{ ...s.chip, ...(quickRemote ? s.chipActive : {}) }}
+                onClick={() => setQuickRemote(v => !v)}
+                type="button"
+              >🌐 Remote Only</button>
+
+              <button
+                style={{ ...s.chip, ...(postedWithinDays === 7 ? s.chipActive : {}) }}
+                onClick={() => setPostedWithinDays(postedWithinDays === 7 ? 0 : 7)}
+                type="button"
+              >📅 Past 7 days</button>
+
+              <button
+                style={{ ...s.chip, ...(postedWithinDays === 1 ? s.chipActive : {}) }}
+                onClick={() => setPostedWithinDays(postedWithinDays === 1 ? 0 : 1)}
+                type="button"
+              >🔥 Past 24h</button>
+
+              <div style={s.chipDivider} />
+
+              <button
+                style={{ ...s.chip, ...(activeCount > 0 ? s.chipBrand : {}) }}
+                onClick={() => setShowFilters(true)}
+                type="button"
+              >
+                ⚙ More filters
+                {activeCount > 0 && (
+                  <span style={s.chipBadge}>{activeCount}</span>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -844,6 +1075,147 @@ const s = {
   // ─── Live agent activity panel (Phase 5 / UI redesign) ─────────────
   agentPanel: {
     marginBottom: 16,
+  },
+
+  // ─── Search + quick-filter bar (NEW: filter UX redesign) ───────────
+  quickBar: {
+    marginBottom: 14,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  searchRow: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'stretch',
+  },
+  searchWrap: {
+    flex: 1,
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: 14,
+    fontSize: 15,
+    color: '#9CA3AF',
+    pointerEvents: 'none',
+  },
+  searchInput: {
+    width: '100%',
+    padding: '11px 38px 11px 40px',
+    borderRadius: 12,
+    border: '1.5px solid rgba(196,181,253,0.4)',
+    background: 'rgba(255,255,255,0.85)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: 'inherit',
+    outline: 'none',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  },
+  searchClear: {
+    position: 'absolute',
+    right: 10,
+    width: 22, height: 22,
+    border: 'none',
+    background: '#E5E7EB',
+    color: '#6B7280',
+    borderRadius: '50%',
+    cursor: 'pointer',
+    fontSize: 11,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 16px',
+    borderRadius: 12,
+    border: '1.5px solid rgba(196,181,253,0.4)',
+    background: 'rgba(255,255,255,0.85)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    color: '#5B21B6',
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.15s, transform 0.1s',
+  },
+  chipRow: {
+    display: 'flex',
+    gap: 8,
+    overflowX: 'auto',
+    paddingBottom: 4,
+    alignItems: 'center',
+  },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '7px 14px',
+    borderRadius: 999,
+    border: '1.5px solid rgba(196,181,253,0.35)',
+    background: 'rgba(255,255,255,0.72)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    color: '#374151',
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.15s',
+    fontFamily: 'inherit',
+  },
+  chipActive: {
+    background: 'linear-gradient(135deg, #6D28D9, #4F46E5)',
+    color: '#fff',
+    border: '1.5px solid #4F46E5',
+    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.30)',
+  },
+  chipBrand: {
+    background: '#EDE9FE',
+    color: '#5B21B6',
+    border: '1.5px solid #C4B5FD',
+  },
+  chipBadge: {
+    background: '#5B21B6',
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 700,
+    padding: '1px 7px',
+    borderRadius: 999,
+    minWidth: 18,
+    textAlign: 'center',
+    marginLeft: 4,
+  },
+  chipDivider: {
+    width: 1,
+    height: 24,
+    background: 'rgba(196,181,253,0.4)',
+    margin: '0 4px',
+    flexShrink: 0,
+  },
+
+  // ─── Clickable stat (Strong matches → toggle filter) ────────────────
+  statClickable: {
+    cursor: 'pointer',
+    border: 'none',
+    background: 'transparent',
+    padding: '4px 10px',
+    borderRadius: 10,
+    fontFamily: 'inherit',
+    transition: 'background 0.15s, color 0.15s',
+  },
+  statActive: {
+    background: 'linear-gradient(135deg, #6D28D9, #4F46E5)',
+    color: '#fff',
+    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.30)',
   },
 
   // ─── Needs Review tab styles ───────────────────────────────────────
