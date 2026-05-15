@@ -608,7 +608,10 @@ export default function Profile() {
                   preferences: prefs,
                 })
               } catch (err) {
-                setImapTest({ status: 'error', message: 'Could not save profile before testing — try the Save button at the bottom of the page' })
+                // Surface the actual backend detail so we can diagnose
+                // ("preferences too large" / "Invalid name" / etc).
+                const detail = err.response?.data?.detail || err.message || 'unknown error'
+                setImapTest({ status: 'error', message: `Save failed: ${detail}` })
                 return
               }
               try {
