@@ -580,7 +580,6 @@ export default function Dashboard() {
             {/* Active filter chips */}
             <div style={s.activeFiltersRow}>
               <div style={s.activeFilters}>
-              <div style={s.activeFilters}>
                 {filters.location?.trim() && (
                   <span style={s.filterChip}>
                     📍 {filters.location}
@@ -673,8 +672,23 @@ export default function Dashboard() {
               <button style={s.filterBtn} onClick={() => setShowFilters(true)}>
                 ⚙ Filters {activeCount > 0 ? `(${activeCount})` : ''}
               </button>
+              {/* Clear all filters — visible whenever ANY filter, search,
+                  or quick-toggle is active. One click resets everything to
+                  the wide-open default view. */}
+              {(activeCount > 0 || search.trim() || strongOnly || quickRemote || postedWithinDays > 0) && (
+                <button
+                  type="button"
+                  style={s.clearFiltersBtn}
+                  onClick={() => {
+                    clearFilters()
+                    toast.success('All filters cleared', { duration: 2000 })
+                  }}
+                  title="Reset all filters, search, and quick toggles"
+                >
+                  ✕ Clear filters
+                </button>
+              )}
             </div>
-          </div>
           </>
         )}
 
@@ -1140,6 +1154,19 @@ const s = {
   filterChip: { background: '#EDE9FE', color: '#6D28D9', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', border: '1px solid #C4B5FD' },
   chipRemove: { background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '10px', padding: '0' },
   filterBtn: { background: '#4F46E5', color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' },
+  clearFiltersBtn: {
+    background: 'transparent',
+    color: '#6B7280',
+    border: '1.5px solid #E5E7EB',
+    padding: '7px 14px',
+    borderRadius: '999px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.15s',
+  },
   tabs: { display: 'flex', marginBottom: '12px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '12px', padding: '4px', border: '1px solid rgba(196,181,253,0.35)' },
   tab: { flex: 1, padding: '10px 16px', border: 'none', background: 'none', fontSize: '14px', fontWeight: '500', color: '#8B85C1', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
   tabActive: { background: 'linear-gradient(135deg, #6d28d9, #4f46e5)', color: '#fff' },
