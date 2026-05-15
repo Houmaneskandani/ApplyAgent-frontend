@@ -1067,17 +1067,17 @@ const s = {
   loadWrap: { height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', background: 'transparent' },
   loadSpinner: { width: '44px', height: '44px', border: '3px solid #e9d5ff', borderTopColor: '#9333ea', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   loadText: { fontSize: '15px', color: '#7c3aed', fontWeight: '500' },
-  container: { maxWidth: '900px', margin: '0 auto', padding: '24px 16px' },
+  container: { maxWidth: '900px', margin: '0 auto', padding: '16px 16px 32px' },
 
-  // ─── Hero header (Option C polish) ─────────────────────────────────
-  heroHeader: { marginBottom: 22 },
+  // ─── Hero header (compact — keeps focus on the job list below) ────
+  heroHeader: { marginBottom: 14 },
   heroTitle: {
-    fontSize: 34,
+    fontSize: 24,
     fontWeight: 800,
-    letterSpacing: '-0.025em',
-    lineHeight: 1.12,
+    letterSpacing: '-0.02em',
+    lineHeight: 1.18,
     color: '#1E1B4B',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   heroAccent: {
     background: 'linear-gradient(90deg, #7C3AED 0%, #EC4899 100%)',
@@ -1086,26 +1086,26 @@ const s = {
     backgroundClip: 'text',
   },
   heroSub: {
-    fontSize: 15,
+    fontSize: 13,
     color: '#6B7280',
-    lineHeight: 1.55,
+    lineHeight: 1.5,
   },
-  heroSubMuted: { color: '#9CA3AF', fontSize: 13 },
+  heroSubMuted: { color: '#9CA3AF', fontSize: 12 },
 
-  // ─── Stat cards (4-col grid, glassmorphic, NO emojis above numbers) ─
+  // ─── Stat cards (compact 4-col grid, glassmorphic, no emojis) ──────
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 12,
-    marginBottom: 18,
+    gap: 10,
+    marginBottom: 12,
   },
   statCard: {
     background: 'rgba(255, 255, 255, 0.72)',
     backdropFilter: 'blur(18px)',
     WebkitBackdropFilter: 'blur(18px)',
     border: '1px solid rgba(196, 181, 253, 0.35)',
-    borderRadius: 14,
-    padding: '18px 20px',
+    borderRadius: 12,
+    padding: '10px 14px',
     textAlign: 'left',
     transition: 'all 0.18s ease',
     fontFamily: 'inherit',
@@ -1116,17 +1116,17 @@ const s = {
   statCardActive: {
     background: 'linear-gradient(135deg, #6D28D9 0%, #4F46E5 100%)',
     border: '1px solid #4F46E5',
-    boxShadow: '0 10px 24px rgba(79, 70, 229, 0.32)',
+    boxShadow: '0 6px 16px rgba(79, 70, 229, 0.28)',
   },
   statNum: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 800,
     color: '#1E1B4B',
     letterSpacing: '-0.02em',
     lineHeight: 1.1,
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  statLabel: { fontSize: 13, color: '#6B7280', fontWeight: 500 },
+  statLabel: { fontSize: 12, color: '#6B7280', fontWeight: 500 },
 
   // ─── Active filters / action row (was statRight) ───────────────────
   activeFiltersRow: {
@@ -1134,13 +1134,13 @@ const s = {
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   activeFilters: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
   filterChip: { background: '#EDE9FE', color: '#6D28D9', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', border: '1px solid #C4B5FD' },
   chipRemove: { background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '10px', padding: '0' },
   filterBtn: { background: '#4F46E5', color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' },
-  tabs: { display: 'flex', marginBottom: '20px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '12px', padding: '4px', border: '1px solid rgba(196,181,253,0.35)' },
+  tabs: { display: 'flex', marginBottom: '12px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '12px', padding: '4px', border: '1px solid rgba(196,181,253,0.35)' },
   tab: { flex: 1, padding: '10px 16px', border: 'none', background: 'none', fontSize: '14px', fontWeight: '500', color: '#8B85C1', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
   tabActive: { background: 'linear-gradient(135deg, #6d28d9, #4f46e5)', color: '#fff' },
   tabArrow: { color: '#ccc', fontSize: '18px' },
@@ -1233,7 +1233,7 @@ const s = {
 
   // ─── Live agent activity panel (Phase 5 / UI redesign) ─────────────
   agentPanel: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
 
   // ─── Search + quick-filter bar (NEW: filter UX redesign) ───────────
