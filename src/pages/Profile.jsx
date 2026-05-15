@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import Navbar from '../components/Navbar'
+// Design tokens — every color/border in this file used to be a hardcoded
+// hex; pulling from theme.js means a future palette swap is one file.
+import { colors } from '../theme'
 
 const SECTIONS = ['Basics', 'Education', 'Portfolio & Links', 'Location', 'Previous Work', 'Behavioral', 'Demographic', 'Legal', 'Email Verification']
 
@@ -256,7 +259,7 @@ export default function Profile() {
             <input style={s.input} value={form.preferred_name} onChange={e => update('preferred_name', e.target.value)} placeholder="If different from legal first name (e.g. Mike instead of Michael)" />
           </Field>
           <Field label="Email" required>
-            <input style={{...s.input, background: '#f8f8f8'}} value={form.email} disabled />
+            <input style={{...s.input, background: colors.surfaceHover}} value={form.email} disabled />
           </Field>
           <Field label="Phone number" required>
             <input style={s.input} value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="949-870-0432" />
@@ -589,7 +592,7 @@ export default function Profile() {
             Some job boards (like Greenhouse) send a verification code to your email before submitting.
             The bot reads the code automatically using IMAP. Use a Gmail account with an{' '}
             <strong>App Password</strong> (not your regular password) —{' '}
-            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{color:'#6d28d9'}}>
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{color: colors.brandAccent}}>
               generate one here
             </a>.
           </p>
@@ -609,9 +612,9 @@ export default function Profile() {
               {form.imap_pass_set && (
                 <span style={{
                   fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em',
-                  color: '#16A34A',
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
+                  color: colors.success,
+                  background: colors.successSoft,
+                  border: `1px solid ${colors.successBorder}`,
                   padding: '2px 8px', borderRadius: '20px',
                 }}>
                   ✓ Saved
@@ -830,64 +833,77 @@ function TagInput({ value, suggestions, input, onInput, onAdd, onRemove, placeho
   )
 }
 
+// Pre-computed border strings so style objects stay readable.
+const BORDER = `1px solid ${colors.border}`
+const BORDER_2 = `2px solid ${colors.border}`
+
 const s = {
   page: { minHeight: '100vh', background: 'transparent' },
-  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' },
+  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: colors.textMuted },
   container: { maxWidth: '960px', margin: '0 auto', padding: '32px 16px', display: 'flex', gap: '24px' },
   sidebar: { width: '200px', flexShrink: 0 },
-  sideItem: { display: 'block', width: '100%', padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'none', textAlign: 'left', fontSize: '14px', fontWeight: '500', color: '#555', cursor: 'pointer', marginBottom: '4px' },
-  sideItemActive: { background: '#fff', color: '#111', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
+  sideItem: { display: 'block', width: '100%', padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'none', textAlign: 'left', fontSize: '14px', fontWeight: '500', color: colors.textSecondary, cursor: 'pointer', marginBottom: '4px' },
+  sideItemActive: { background: colors.surface, color: colors.textPrimary, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
   main: { flex: 1 },
-  card: { background: '#fff', borderRadius: '16px', padding: '32px', border: '1px solid #e8e8e8', marginBottom: '16px' },
+  card: { background: colors.surface, borderRadius: '16px', padding: '32px', border: BORDER, marginBottom: '16px' },
   sectionBody: {},
-  sectionTitle: { fontSize: '24px', fontWeight: '700', marginBottom: '24px', color: '#111' },
-  sectionSubtitle: { fontSize: '13px', color: '#888', marginBottom: '20px', marginTop: '-16px' },
+  sectionTitle: { fontSize: '24px', fontWeight: '700', marginBottom: '24px', color: colors.textPrimary },
+  sectionSubtitle: { fontSize: '13px', color: colors.textMuted, marginBottom: '20px', marginTop: '-16px' },
   row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
-  input: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' },
-  select: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '14px', outline: 'none', background: '#fff' },
-  textarea: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' },
-  fieldLabel: { fontSize: '14px', fontWeight: '600', color: '#111', marginBottom: '12px' },
-  hint: { fontSize: '12px', color: '#888', marginTop: '6px' },
-  salaryBox: { background: '#f9f9f9', borderRadius: '12px', padding: '20px', marginTop: '8px' },
+  input: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: BORDER, fontSize: '14px', outline: 'none', boxSizing: 'border-box' },
+  select: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: BORDER, fontSize: '14px', outline: 'none', background: colors.surface },
+  textarea: { width: '100%', padding: '12px 14px', borderRadius: '10px', border: BORDER, fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' },
+  fieldLabel: { fontSize: '14px', fontWeight: '600', color: colors.textPrimary, marginBottom: '12px' },
+  hint: { fontSize: '12px', color: colors.textMuted, marginTop: '6px' },
+  // surfaceHover is a faint brand-tinted off-white — close enough to the
+  // previous neutral #f9f9f9 to read identically.
+  salaryBox: { background: colors.surfaceHover, borderRadius: '12px', padding: '20px', marginTop: '8px' },
   resumeRow: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' },
-  resumeCheck: { color: '#16a34a', fontSize: '18px' },
+  resumeCheck: { color: colors.success, fontSize: '18px' },
   resumeText: { fontSize: '14px', fontWeight: '500' },
-  changeBtn: { padding: '6px 14px', borderRadius: '8px', border: '1px solid #e0e0e0', background: '#fff', fontSize: '13px', cursor: 'pointer' },
+  changeBtn: { padding: '6px 14px', borderRadius: '8px', border: BORDER, background: colors.surface, fontSize: '13px', cursor: 'pointer' },
+  // The download link is intentionally classic blue (#2563eb) — it's a
+  // user-affordance "this is a real link" signal, not a brand surface,
+  // so the brand violet would feel wrong here.
   downloadLink: { fontSize: '13px', color: '#2563eb', textDecoration: 'underline' },
-  uploadBtn: { padding: '10px 20px', borderRadius: '10px', border: '2px dashed #ddd', background: '#fafafa', fontSize: '14px', color: '#555', cursor: 'pointer' },
-  authTable: { border: '1px solid #e8e8e8', borderRadius: '10px', overflow: 'hidden' },
-  authHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f8f8f8', fontSize: '13px', fontWeight: '600', color: '#555' },
+  uploadBtn: { padding: '10px 20px', borderRadius: '10px', border: `2px dashed ${colors.border}`, background: colors.surfaceHover, fontSize: '14px', color: colors.textSecondary, cursor: 'pointer' },
+  authTable: { border: BORDER, borderRadius: '10px', overflow: 'hidden' },
+  authHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '10px 16px', background: colors.surfaceHover, fontSize: '13px', fontWeight: '600', color: colors.textSecondary },
   authRow: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '12px 16px', alignItems: 'center' },
   authCountry: { fontSize: '14px', fontWeight: '500' },
   authCol1: {}, authCol2: { textAlign: 'center' },
   workPrefGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' },
-  workPrefCard: { padding: '16px', borderRadius: '12px', border: '2px solid #e8e8e8', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px', position: 'relative', transition: 'all 0.15s' },
-  workPrefCardActive: { border: '2px solid #111', background: '#f8f8f8' },
-  workPrefIcon: { fontSize: '15px', fontWeight: '600', color: '#111' },
-  workPrefDesc: { fontSize: '12px', color: '#888' },
-  workPrefCheck: { position: 'absolute', top: '10px', right: '12px', color: '#111', fontWeight: '700' },
+  workPrefCard: { padding: '16px', borderRadius: '12px', border: BORDER_2, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px', position: 'relative', transition: 'all 0.15s' },
+  workPrefCardActive: { border: `2px solid ${colors.textPrimary}`, background: colors.surfaceHover },
+  workPrefIcon: { fontSize: '15px', fontWeight: '600', color: colors.textPrimary },
+  workPrefDesc: { fontSize: '12px', color: colors.textMuted },
+  workPrefCheck: { position: 'absolute', top: '10px', right: '12px', color: colors.textPrimary, fontWeight: '700' },
   message: { padding: '12px 16px', borderRadius: '10px', marginBottom: '16px', fontSize: '14px' },
   saveRow: { display: 'flex', justifyContent: 'flex-end' },
-  saveBtn: { background: '#111', color: '#fff', border: 'none', padding: '12px 32px', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
+  saveBtn: { background: colors.textPrimary, color: colors.textOnDark, border: 'none', padding: '12px 32px', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
 }
 const fS = {
-  label: { display: 'block', fontSize: '14px', fontWeight: '600', color: '#111', marginBottom: '8px' },
+  label: { display: 'block', fontSize: '14px', fontWeight: '600', color: colors.textPrimary, marginBottom: '8px' },
+  // Orange "required" indicator — no warning-orange token (theme uses
+  // amber #D97706 for warning). Kept #f97316 to preserve the visual.
   req: { color: '#f97316', fontSize: '13px', marginLeft: '4px' },
 }
 const skS = {
-  tableHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 24px', padding: '8px 12px', background: '#f8f8f8', borderRadius: '8px 8px 0 0', border: '1px solid #e8e8e8', fontSize: '12px', fontWeight: '600', color: '#666', textAlign: 'center' },
-  tableRow: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 24px', padding: '10px 12px', border: '1px solid #e8e8e8', borderTop: 'none', alignItems: 'center', textAlign: 'center' },
+  tableHeader: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 24px', padding: '8px 12px', background: colors.surfaceHover, borderRadius: '8px 8px 0 0', border: BORDER, fontSize: '12px', fontWeight: '600', color: colors.textMuted, textAlign: 'center' },
+  tableRow: { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 24px', padding: '10px 12px', border: BORDER, borderTop: 'none', alignItems: 'center', textAlign: 'center' },
   nameCol: { textAlign: 'left' },
   levelCol: { display: 'flex', justifyContent: 'center', alignItems: 'center' },
   badge: { padding: '3px 10px', borderRadius: '20px', fontSize: '13px', fontWeight: '500' },
-  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '12px', padding: '0' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: colors.textMuted, fontSize: '12px', padding: '0' },
 }
 const tS = {
   wrap: { position: 'relative' },
-  box: { display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 12px', border: '1px solid #e0e0e0', borderRadius: '10px', minHeight: '46px', alignItems: 'center' },
+  box: { display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 12px', border: BORDER, borderRadius: '10px', minHeight: '46px', alignItems: 'center' },
+  // A custom-light tag fill (#f0f0f0 = lighter than colors.surfaceHover's
+  // brand tint). Kept hex to preserve neutral feel.
   tag: { background: '#f0f0f0', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' },
-  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '11px', padding: '0' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: colors.textMuted, fontSize: '11px', padding: '0' },
   input: { border: 'none', outline: 'none', fontSize: '14px', flex: 1, minWidth: '120px' },
-  dropdown: { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e0e0e0', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, marginTop: '4px' },
-  option: { padding: '10px 14px', fontSize: '14px', cursor: 'pointer', color: '#333' },
+  dropdown: { position: 'absolute', top: '100%', left: 0, right: 0, background: colors.surface, border: BORDER, borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, marginTop: '4px' },
+  option: { padding: '10px 14px', fontSize: '14px', cursor: 'pointer', color: colors.textSecondary },
 }
