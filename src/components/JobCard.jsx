@@ -1,4 +1,6 @@
-export default function JobCard({ job, onApply, applying, onClick, queueState }) {
+import { memo } from 'react'
+
+function JobCard({ job, onApply, applying, onClick, queueState }) {
   const isApplied = job.status === 'applied'
   const inQueue = queueState?.status === 'queued'
   const isApplying = queueState?.status === 'applying' || applying === job.id
@@ -90,6 +92,23 @@ export default function JobCard({ job, onApply, applying, onClick, queueState })
     </div>
   )
 }
+
+// SECURITY/PERF: memoize so re-renders triggered by unrelated Dashboard state
+// (filter chip clicks, queue polling, etc.) don't re-render every card.
+//
+// We compare props shallowly with a custom equality on the fields we
+// actually use, so the parent passing fresh prop objects on every render
+// won't bust the memo unless the underlying data changed.
+export default memo(JobCard, (prev, next) => (
+  prev.job?.id === next.job?.id
+  && prev.job?.status === next.job?.status
+  && prev.job?.score === next.job?.score
+  && prev.applying === next.applying
+  && prev.queueState?.status === next.queueState?.status
+  && prev.queueState?.queue_position === next.queueState?.queue_position
+  && prev.onApply === next.onApply
+  && prev.onClick === next.onClick
+))
 
 function Spinner() {
   return (

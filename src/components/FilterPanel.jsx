@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import useModalA11y from '../hooks/useModalA11y'
 
 const EXPERIENCE_LEVELS = ['Entry Level & Graduate', 'Junior (1-2 years)', 'Mid Level (3-5 years)', 'Senior (5-8 years)', 'Staff / Principal (8+ years)']
 const JOB_TYPES = ['Full time', 'Part time', 'Contract']
@@ -7,6 +8,8 @@ const KEYWORDS = ['Python', 'Go', 'Golang', 'JavaScript', 'Backend', 'API', 'Pos
 
 export default function FilterPanel({ filters, onChange, onClose, jobCount, onSave }) {
   const [local, setLocal] = useState(filters)
+  const panelRef = useRef(null)
+  useModalA11y(panelRef, { open: true, onClose })
 
   const toggle = (key, value) => {
     const arr = local[key] || []
@@ -18,10 +21,16 @@ export default function FilterPanel({ filters, onChange, onClose, jobCount, onSa
 
   return (
     <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={s.panel}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filter-panel-title"
+        style={s.panel}
+      >
         <div style={s.header}>
-          <h2 style={s.title}>Filters</h2>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+          <h2 id="filter-panel-title" style={s.title}>Filters</h2>
+          <button style={s.closeBtn} onClick={onClose} aria-label="Close filters" type="button">✕</button>
         </div>
 
         <div style={s.body}>

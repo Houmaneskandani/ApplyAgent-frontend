@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../api'
@@ -34,8 +34,13 @@ export default function Dashboard() {
   const [searchParams] = useSearchParams()
   const queuePollRef = useRef(null)
 
-  // Build a quick lookup: job_id → queue entry
-  const queueMap = Object.fromEntries(queue.map(q => [q.job_id, q]))
+  // PERF: memoize so unrelated state changes (filter chip clicks, search
+  // params, applying flips) don't rebuild this object every render — which
+  // would cascade into every JobCard seeing a new queueState prop reference.
+  const queueMap = useMemo(
+    () => Object.fromEntries(queue.map(q => [q.job_id, q])),
+    [queue],
+  )
 
   useEffect(() => {
     loadData()
@@ -175,7 +180,13 @@ export default function Dashboard() {
     }
   }
 
-  const getFilteredJobs = useCallback(() => {
+  // PERF: this used to be a `useCallback`-wrapped function that was called on
+  // EVERY render — defeating the point of useCallback because the *result*
+  // (filteredJobs) was a fresh array each time. With ~200 jobs and ~50 inline
+  // style objects per JobCard, the previous behavior re-rendered every card
+  // on every filter chip click. Now: memoize the result; only recompute when
+  // the relevant deps actually change.
+  const filteredJobs = useMemo(() => {
     let jobs = [...allJobs]
 
     if (tab === 'Applied') jobs = jobs.filter(j => j.status === 'applied')
@@ -236,8 +247,6 @@ export default function Dashboard() {
     }
     return jobs
   }, [allJobs, tab, filters, sortBy])
-
-  const filteredJobs = getFilteredJobs()
 
   if (loading) return (
     <div style={s.loadWrap}>

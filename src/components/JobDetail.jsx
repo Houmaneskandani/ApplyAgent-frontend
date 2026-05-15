@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import api from '../api'
 import useIsMobile from '../hooks/useIsMobile'
+import useModalA11y from '../hooks/useModalA11y'
 
 // Decode HTML entities (handles double-encoded descriptions like &lt;h2&gt; → <h2>)
 function decodeEntities(str) {
@@ -44,6 +45,13 @@ function sanitizeDescription(html) {
 export default function JobDetail({ job, onClose, onApply, applying }) {
   const isMobile = useIsMobile()
   const [description, setDescription] = useState(null)
+  const panelRef = useRef(null)
+
+  // Modal a11y: Escape to close, focus trap inside, restore focus to opener
+  // when the modal unmounts. Without this, keyboard users could Tab into the
+  // background dashboard while the modal was open — and couldn't dismiss it
+  // without a mouse.
+  useModalA11y(panelRef, { open: !!job, onClose })
 
   useEffect(() => {
     if (!job) return
@@ -79,17 +87,33 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
   }
 
   return (
-    <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        ...s.panel,
-        width: isMobile ? '100%' : '480px',
-        height: isMobile ? '92vh' : '100vh',
-        alignSelf: isMobile ? 'flex-end' : 'auto',
-        borderRadius: isMobile ? '20px 20px 0 0' : '0',
-      }}>
+    <div
+      style={s.overlay}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="job-detail-title"
+        style={{
+          ...s.panel,
+          width: isMobile ? '100%' : '480px',
+          height: isMobile ? '92vh' : '100vh',
+          alignSelf: isMobile ? 'flex-end' : 'auto',
+          borderRadius: isMobile ? '20px 20px 0 0' : '0',
+        }}
+      >
         {/* Header */}
         <div style={s.header}>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+          <button
+            style={s.closeBtn}
+            onClick={onClose}
+            aria-label="Close job details"
+            type="button"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Job info */}
@@ -99,7 +123,7 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
               {getInitials(job.company)}
             </div>
             <div>
-              <h2 style={s.title}>{job.title}</h2>
+              <h2 id="job-detail-title" style={s.title}>{job.title}</h2>
               <div style={s.meta}>
                 <span style={s.company}>{job.company}</span>
                 {job.location && <><span style={s.dot}>·</span><span style={s.metaText}>{job.location}</span></>}
