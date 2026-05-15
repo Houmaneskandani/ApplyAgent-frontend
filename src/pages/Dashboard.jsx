@@ -513,49 +513,73 @@ export default function Dashboard() {
 
       <div style={s.container}>
         {stats && (
-          <div style={s.statsBar}>
-            <div style={s.stat}>
-              <span style={s.statNum}>{stats.total_jobs?.toLocaleString()}</span>
-              <span style={s.statLabel}>Jobs found</span>
+          <>
+            {/* Hero header — frames the dashboard as "your opportunities, ranked" */}
+            <div style={s.heroHeader}>
+              <h1 style={s.heroTitle}>
+                Your{' '}
+                <span style={s.heroAccent}>
+                  {(stats.total_jobs ?? 0).toLocaleString()}
+                </span>{' '}
+                opportunities, ranked.
+              </h1>
+              <p style={s.heroSub}>
+                We scored every posting against your resume.{' '}
+                <span style={s.heroSubMuted}>
+                  Last updated {stats.last_scraped_ago || 'Never'}
+                </span>
+              </p>
             </div>
-            <div style={s.statDivider} />
-            <button
-              type="button"
-              onClick={() => {
-                setTab('Job Matches')
-                setStrongOnly(v => !v)
-              }}
-              style={{
-                ...s.stat,
-                ...s.statClickable,
-                ...(strongOnly ? s.statActive : {}),
-              }}
-              aria-pressed={strongOnly}
-              title="Click to show only strong matches (score 8+)"
-            >
-              <span style={{ ...s.statNum, color: strongOnly ? '#fff' : s.statNum.color }}>
-                {stats.strong_matches}
-              </span>
-              <span style={{ ...s.statLabel, color: strongOnly ? 'rgba(255,255,255,0.85)' : s.statLabel.color }}>
-                Strong matches
-              </span>
-            </button>
-            <div style={s.statDivider} />
-            <div style={s.stat}>
-              <span style={{...s.statNum, color: '#16a34a'}}>{stats.applied || 0}</span>
-              <span style={s.statLabel}>Applied</span>
+
+            {/* Stat cards — glassmorphic, no icons above numbers per user request */}
+            <div style={s.statsGrid}>
+              <div style={s.statCard}>
+                <div style={s.statNum}>{(stats.total_jobs ?? 0).toLocaleString()}</div>
+                <div style={s.statLabel}>Jobs found</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('Job Matches')
+                  setStrongOnly(v => !v)
+                }}
+                style={{
+                  ...s.statCard,
+                  ...s.statCardClickable,
+                  ...(strongOnly ? s.statCardActive : {}),
+                }}
+                aria-pressed={strongOnly}
+                title="Click to filter to score 8+ only"
+              >
+                <div style={{
+                  ...s.statNum,
+                  color: strongOnly ? '#fff' : '#4F46E5',
+                }}>{stats.strong_matches ?? 0}</div>
+                <div style={{
+                  ...s.statLabel,
+                  color: strongOnly ? 'rgba(255,255,255,0.85)' : s.statLabel.color,
+                }}>Strong matches</div>
+              </button>
+
+              <div style={s.statCard}>
+                <div style={{ ...s.statNum, color: '#16A34A' }}>
+                  {stats.applied ?? 0}
+                </div>
+                <div style={s.statLabel}>Applied</div>
+              </div>
+
+              <div style={s.statCard}>
+                <div style={s.statNum}>
+                  {tab === 'Applying' ? queue.length : filteredJobs.length}
+                </div>
+                <div style={s.statLabel}>Showing</div>
+              </div>
             </div>
-            <div style={s.statDivider} />
-            <div style={s.stat}>
-              <span style={s.statNum}>{tab === 'Applying' ? queue.length : filteredJobs.length}</span>
-              <span style={s.statLabel}>Showing</span>
-            </div>
-            <div style={s.statDivider} />
-            <div style={s.stat}>
-              <span style={{...s.statNum, fontSize: '13px', color: '#6b7280'}}>{stats.last_scraped_ago || 'Never'}</span>
-              <span style={s.statLabel}>Last updated</span>
-            </div>
-            <div style={s.statRight}>
+
+            {/* Active filter chips */}
+            <div style={s.activeFiltersRow}>
+              <div style={s.activeFilters}>
               <div style={s.activeFilters}>
                 {filters.location?.trim() && (
                   <span style={s.filterChip}>
@@ -651,6 +675,7 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+          </>
         )}
 
         {/* Phase 5 / UX redesign — live agent activity panel.
@@ -1043,12 +1068,74 @@ const s = {
   loadSpinner: { width: '44px', height: '44px', border: '3px solid #e9d5ff', borderTopColor: '#9333ea', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   loadText: { fontSize: '15px', color: '#7c3aed', fontWeight: '500' },
   container: { maxWidth: '900px', margin: '0 auto', padding: '24px 16px' },
-  statsBar: { background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '14px', padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px', border: '1px solid rgba(196,181,253,0.35)', flexWrap: 'wrap' },
-  stat: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px' },
-  statNum: { fontSize: '22px', fontWeight: '700', color: '#111' },
-  statLabel: { fontSize: '12px', color: '#888', marginTop: '2px' },
-  statDivider: { width: '1px', height: '36px', background: '#f0f0f0' },
-  statRight: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+
+  // ─── Hero header (Option C polish) ─────────────────────────────────
+  heroHeader: { marginBottom: 22 },
+  heroTitle: {
+    fontSize: 34,
+    fontWeight: 800,
+    letterSpacing: '-0.025em',
+    lineHeight: 1.12,
+    color: '#1E1B4B',
+    marginBottom: 8,
+  },
+  heroAccent: {
+    background: 'linear-gradient(90deg, #7C3AED 0%, #EC4899 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+  },
+  heroSub: {
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 1.55,
+  },
+  heroSubMuted: { color: '#9CA3AF', fontSize: 13 },
+
+  // ─── Stat cards (4-col grid, glassmorphic, NO emojis above numbers) ─
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 12,
+    marginBottom: 18,
+  },
+  statCard: {
+    background: 'rgba(255, 255, 255, 0.72)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    border: '1px solid rgba(196, 181, 253, 0.35)',
+    borderRadius: 14,
+    padding: '18px 20px',
+    textAlign: 'left',
+    transition: 'all 0.18s ease',
+    fontFamily: 'inherit',
+  },
+  statCardClickable: {
+    cursor: 'pointer',
+  },
+  statCardActive: {
+    background: 'linear-gradient(135deg, #6D28D9 0%, #4F46E5 100%)',
+    border: '1px solid #4F46E5',
+    boxShadow: '0 10px 24px rgba(79, 70, 229, 0.32)',
+  },
+  statNum: {
+    fontSize: 28,
+    fontWeight: 800,
+    color: '#1E1B4B',
+    letterSpacing: '-0.02em',
+    lineHeight: 1.1,
+    marginBottom: 4,
+  },
+  statLabel: { fontSize: 13, color: '#6B7280', fontWeight: 500 },
+
+  // ─── Active filters / action row (was statRight) ───────────────────
+  activeFiltersRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 18,
+  },
   activeFilters: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
   filterChip: { background: '#EDE9FE', color: '#6D28D9', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', border: '1px solid #C4B5FD' },
   chipRemove: { background: 'none', border: 'none', cursor: 'pointer', color: '#888', fontSize: '10px', padding: '0' },
