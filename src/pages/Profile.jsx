@@ -597,6 +597,20 @@ export default function Profile() {
             style={{...s.saveBtn, marginTop: '8px', width: 'auto', padding: '10px 20px', fontSize: '14px'}}
             onClick={async () => {
               setImapTest({ status: 'loading', message: '' })
+              // Save the profile FIRST so the backend has the values we just
+              // typed — otherwise /profile/test-imap reads stale (empty) DB
+              // state and tells the user "no credentials saved" even though
+              // they're typed in the form. This was a real bug users hit.
+              try {
+                const { first_name, last_name, email, resume_url, ...prefs } = form
+                await api.put('/profile/', {
+                  name: `${first_name} ${last_name}`.trim(),
+                  preferences: prefs,
+                })
+              } catch (err) {
+                setImapTest({ status: 'error', message: 'Could not save profile before testing — try the Save button at the bottom of the page' })
+                return
+              }
               try {
                 const r = await api.post('/profile/test-imap')
                 setImapTest({ status: 'ok', message: r.data.message })
@@ -605,7 +619,7 @@ export default function Profile() {
               }
             }}
           >
-            {imapTest.status === 'loading' ? '⏳ Testing...' : '🔌 Test Connection'}
+            {imapTest.status === 'loading' ? '⏳ Saving + testing...' : '🔌 Save & Test Connection'}
           </button>
           {imapTest.message && (
             <p style={{ marginTop: '10px', fontSize: '13px', color: imapTest.status === 'ok' ? '#16a34a' : '#dc2626', fontWeight: '500' }}>
