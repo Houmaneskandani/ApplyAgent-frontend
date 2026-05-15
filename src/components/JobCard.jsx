@@ -1,10 +1,42 @@
 import { memo } from 'react'
 
+// Format the applied-at timestamp into two pieces:
+//   relative: "5 min ago" / "2h ago" / "3d ago" / "May 15"
+//   absolute: "May 15, 2026 at 4:42 PM" (used as a tooltip on hover)
+// Returns { relative, absolute } or null if the timestamp is missing/bad.
+function formatAppliedAt(raw) {
+  if (!raw) return null
+  // Backend returns Postgres timestamps as "2026-05-15 16:42:38.123456+00"
+  // which Safari's Date constructor can't parse — replace the space with T
+  // and ensure timezone is present so JS treats it as UTC, not local.
+  let isoish = raw.replace(' ', 'T')
+  if (!/[Zz]|[+-]\d{2}:?\d{2}$/.test(isoish)) isoish += 'Z'
+  const d = new Date(isoish)
+  if (isNaN(d.getTime())) return null
+  const now = Date.now()
+  const diff = Math.max(0, now - d.getTime())
+  const min = Math.floor(diff / 60_000)
+  const hour = Math.floor(diff / 3_600_000)
+  const day = Math.floor(diff / 86_400_000)
+  let relative
+  if (min < 1) relative = 'just now'
+  else if (min < 60) relative = `${min} min ago`
+  else if (hour < 24) relative = `${hour}h ago`
+  else if (day < 7) relative = `${day}d ago`
+  else relative = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const absolute = d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+  return { relative, absolute }
+}
+
 function JobCard({ job, onApply, applying, onClick, queueState }) {
   const isApplied = job.status === 'applied'
   const isUnknown = job.status === 'unknown'  // Phase 5: needs review
   const inQueue = queueState?.status === 'queued'
   const isApplying = queueState?.status === 'applying' || applying === job.id
+  const appliedAt = isApplied ? formatAppliedAt(job.applied_at) : null
 
   const getInitials = (company) => company?.slice(0, 2).toUpperCase() || 'JB'
   const getBgColor = (company) => {
@@ -51,8 +83,19 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
             ) : (
               <span style={s.newPill}>New</span>
             )}
-            <span style={s.dot}>·</span>
-            <span style={s.metaText}>{job.posted_at || 'Recently'}</span>
+            {appliedAt ? (
+              <>
+                <span style={s.dot}>·</span>
+                <span style={s.appliedTime} title={appliedAt.absolute}>
+                  📅 Applied {appliedAt.relative}
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={s.dot}>·</span>
+                <span style={s.metaText}>{job.posted_at || 'Recently'}</span>
+              </>
+            )}
             <span style={s.dot}>·</span>
             <span style={s.metaText}>{job.experience_level || 'Mid Level'}</span>
             {job.location && (
@@ -110,6 +153,7 @@ export default memo(JobCard, (prev, next) => (
   && prev.job?.status === next.job?.status
   && prev.job?.score === next.job?.score
   && prev.job?.notes === next.job?.notes
+  && prev.job?.applied_at === next.job?.applied_at
   && prev.applying === next.applying
   && prev.queueState?.status === next.queueState?.status
   && prev.queueState?.queue_position === next.queueState?.queue_position
@@ -142,6 +186,7 @@ const s = {
   pillRow: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
   newPill: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   appliedPill: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
+  appliedTime: { fontSize: '12px', color: '#16a34a', fontWeight: '600', cursor: 'help' },
   applyingPill: { fontSize: '12px', background: '#FEF3C7', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
   queuedPill: { fontSize: '12px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   unknownPill: { fontSize: '12px', background: '#FFFBEB', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '600', border: '1px solid #FCD34D' },

