@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 import './index.css'
 import App from './App.jsx'
+import { initAnalytics } from './lib/analytics'
+
+// Boot analytics before the first render. No-op if VITE_POSTHOG_KEY isn't set
+// (local dev, Vercel previews without the env var, etc.).
+initAnalytics()
 
 // Suppress the harmless ResizeObserver loop notification (browser quirk, not a real error)
 const _origError = window.onerror

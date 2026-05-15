@@ -1,5 +1,19 @@
-import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { capturePageview } from './lib/analytics'
+
+/**
+ * Fire a $pageview event on every route change. Lives inside <BrowserRouter>
+ * so it can use useLocation. React Router 7 doesn't fire native browser
+ * navigation events for SPA transitions, so we capture them manually.
+ */
+function PageviewTracker() {
+  const location = useLocation()
+  useEffect(() => {
+    capturePageview(location.pathname + location.search)
+  }, [location.pathname, location.search])
+  return null
+}
 
 // Code-split every page so the Login screen doesn't ship the full Dashboard
 // + Profile + Pricing JS. Login + Signup are lightweight; Dashboard.jsx and
@@ -41,6 +55,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      <PageviewTracker />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />

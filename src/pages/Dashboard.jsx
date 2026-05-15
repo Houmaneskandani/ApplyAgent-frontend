@@ -211,6 +211,12 @@ export default function Dashboard() {
     try {
       const r = await api.post('/auto-apply/toggle')
       setAutoApply(prev => ({ ...prev, enabled: r.data.enabled }))
+      // Analytics: this is one of the most important "aha" moments for
+      // the product — the user trusted the bot enough to let it apply
+      // for them. Track each transition (off→on and on→off).
+      import('../lib/analytics').then(({ track }) => {
+        track('auto_apply_toggled', { enabled: r.data.enabled })
+      }).catch(() => {})
       if (r.data.enabled) {
         setTab('Applying')
         setTimeout(() => api.get('/queue/').then(r => setQueue(r.data)).catch(() => {}), 2000)

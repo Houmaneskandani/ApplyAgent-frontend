@@ -148,7 +148,17 @@ export default function Navbar({ credits = 0 }) {
   const location = useLocation()
   const name = localStorage.getItem('name') || '?'
 
-  const logout = () => { localStorage.clear(); navigate('/login') }
+  const logout = () => {
+    // Clear analytics identity FIRST so the final 'logout' event is
+    // attributed to the user who's leaving, and subsequent anonymous
+    // traffic on the login page doesn't get mixed into their profile.
+    import('../lib/analytics').then(({ track, resetAnalytics }) => {
+      track('logout')
+      resetAnalytics()
+    }).catch(() => {})
+    localStorage.clear()
+    navigate('/login')
+  }
 
   const navItem = (to) => ({
     fontSize: '13px', fontWeight: '500',

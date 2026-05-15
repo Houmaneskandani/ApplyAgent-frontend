@@ -45,6 +45,12 @@ export default function Signup() {
       const res = await api.post('/auth/signup', form)
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('name', res.data.name)
+      // Analytics: attach this anonymous session to a person, then fire
+      // the funnel event. The order matters — identify first so the
+      // signup_completed event is attributed to the right user_id.
+      const { identifyUser, track } = await import('../lib/analytics')
+      identifyUser({ user_id: res.data.user_id, email: form.email, name: form.name })
+      track('signup_completed', { method: 'email' })
       navigate('/dashboard')
     } catch (err) {
       const status = err.response?.status

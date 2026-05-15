@@ -37,6 +37,13 @@ export default function Login() {
       const res = await api.post('/auth/login', { email, password })
       localStorage.setItem('token', res.data.token)
       localStorage.setItem('name', res.data.name)
+      // Analytics: identify so subsequent events belong to this user.
+      // (login isn't a funnel event — we only track signup_completed
+      // for activation analysis. But identify is required so logged-in
+      // actions like 'auto_apply_toggled' get attributed correctly.)
+      const { identifyUser, track } = await import('../lib/analytics')
+      identifyUser({ user_id: res.data.user_id, email, name: res.data.name })
+      track('login_completed')
       navigate(safeNext(searchParams.get('next')))
     } catch (err) {
       const status = err.response?.status
