@@ -6,7 +6,7 @@ const JOB_TYPES = ['Full time', 'Part time', 'Contract']
 const INDUSTRIES = ['FinTech', 'AI / ML', 'Healthcare', 'E-commerce', 'Cybersecurity', 'Media & Entertainment', 'Developer Tools', 'Infrastructure']
 const KEYWORDS = ['Python', 'Go', 'Golang', 'JavaScript', 'Backend', 'API', 'PostgreSQL', 'AWS', 'GCP', 'Docker', 'Kubernetes', 'GraphQL', 'MongoDB']
 
-export default function FilterPanel({ filters, onChange, onClose, jobCount, onSave }) {
+export default function FilterPanel({ filters, onChange, onClose, jobCount, onSave, onRefreshJobs, refreshing = false }) {
   const [local, setLocal] = useState(filters)
   const panelRef = useRef(null)
   useModalA11y(panelRef, { open: true, onClose })
@@ -34,6 +34,31 @@ export default function FilterPanel({ filters, onChange, onClose, jobCount, onSa
         </div>
 
         <div style={s.body}>
+          {/* Find new jobs — manual scrape trigger. Lives at the top of the
+              panel so users can both broaden their filter AND fetch fresh
+              jobs in one place. (Used to be its own top-row button.) */}
+          {onRefreshJobs && (
+            <div style={s.refreshSection}>
+              <div style={s.refreshHeader}>
+                <div>
+                  <div style={s.refreshTitle}>Find new jobs</div>
+                  <div style={s.refreshSubtitle}>
+                    Scan 40+ companies for fresh openings. Takes ~30-60 seconds.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  style={{ ...s.refreshBtn, ...(refreshing ? s.refreshBtnDisabled : {}) }}
+                  disabled={refreshing}
+                  onClick={() => onRefreshJobs()}
+                  aria-label="Search for new jobs"
+                >
+                  {refreshing ? '⏳ Searching...' : '🔍 Search now'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Job section */}
           <div style={s.section}>
             <div style={s.sectionHeader}>
@@ -202,6 +227,27 @@ const s = {
   input: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e0e0e0', fontSize: '14px', outline: 'none' },
   hint: { fontSize: '12px', color: '#999', marginTop: '4px' },
   quickLocations: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' },
+  refreshSection: {
+    marginBottom: '20px',
+    padding: '16px',
+    borderRadius: '12px',
+    background: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
+    border: '1px solid #DDD6FE',
+  },
+  refreshHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
+  refreshTitle: { fontSize: '15px', fontWeight: '700', color: '#1E1B4B', marginBottom: '2px' },
+  refreshSubtitle: { fontSize: '12px', color: '#6B7280', lineHeight: 1.4 },
+  refreshBtn: {
+    background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
+    color: '#fff', border: 'none',
+    padding: '10px 16px', borderRadius: '8px',
+    fontSize: '13px', fontWeight: '600',
+    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.28)',
+    flexShrink: 0,
+    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+    cursor: 'pointer',
+  },
+  refreshBtnDisabled: { background: '#9CA3AF', boxShadow: 'none', cursor: 'wait' },
   footer: { padding: '16px 24px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', bottom: 0, background: '#fff' },
   jobCount: { background: '#d4f564', color: '#111', padding: '6px 14px', borderRadius: '20px', fontSize: '14px', fontWeight: '600' },
   saveBtn: { background: 'linear-gradient(135deg, #9333ea, #6d28d9)', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '10px', fontSize: '15px', fontWeight: '600', boxShadow: '0 3px 10px rgba(109,40,217,0.3)' },

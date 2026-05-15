@@ -658,20 +658,9 @@ export default function Dashboard() {
               >
                 {liveMode ? '🔴 Live Mode ON' : '⚫ Dry Run'}
               </button>
-              <button
-                style={{...s.filterBtn, background: scraping ? '#6b7280' : '#059669'}}
-                disabled={scraping}
-                onClick={runScrape}
-              >
-                {scraping ? '⏳ Searching...' : '🔍 Search Jobs'}
-              </button>
-              <button
-                style={{...s.filterBtn, background: sortBy === 'date' ? '#7c3aed' : '#374151'}}
-                onClick={() => setSortBy(s => s === 'score' ? 'date' : 'score')}
-                title={sortBy === 'score' ? 'Currently sorted by match score — click to sort by date' : 'Currently sorted by newest — click to sort by match score'}
-              >
-                {sortBy === 'score' ? '⭐ Best Match' : '🕐 Newest First'}
-              </button>
+              {/* Search Jobs lives inside the FilterPanel now — same scrape,
+                  one fewer button up here. Best Match / Newest is also gone
+                  (the chip row below the tabs has 1:1 duplicates). */}
               <button style={s.filterBtn} onClick={() => setShowFilters(true)}>
                 ⚙ Filters {activeCount > 0 ? `(${activeCount})` : ''}
               </button>
@@ -962,6 +951,8 @@ export default function Dashboard() {
           onSave={saveFilters}
           onClose={() => setShowFilters(false)}
           jobCount={filteredJobs.length}
+          onRefreshJobs={runScrape}
+          refreshing={scraping}
         />
       )}
 
