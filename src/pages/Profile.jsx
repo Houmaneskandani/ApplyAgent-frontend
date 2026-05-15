@@ -597,10 +597,13 @@ export default function Profile() {
             style={{...s.saveBtn, marginTop: '8px', width: 'auto', padding: '10px 20px', fontSize: '14px'}}
             onClick={async () => {
               setImapTest({ status: 'loading', message: '' })
-              // Save the profile FIRST so the backend has the values we just
-              // typed — otherwise /profile/test-imap reads stale (empty) DB
-              // state and tells the user "no credentials saved" even though
-              // they're typed in the form. This was a real bug users hit.
+              // Best-effort save. If the user already saved via the main
+              // button, the API might be busy with a background rescore
+              // and this PUT can transiently time out — that's fine,
+              // the DB already has fresh credentials. Always proceed to
+              // the test regardless of save outcome.
+              let saveOk = true
+              let saveErr = null
               try {
                 const { first_name, last_name, email, resume_url, ...prefs } = form
                 await api.put('/profile/', {
@@ -608,17 +611,23 @@ export default function Profile() {
                   preferences: prefs,
                 })
               } catch (err) {
-                // Surface the actual backend detail so we can diagnose
-                // ("preferences too large" / "Invalid name" / etc).
-                const detail = err.response?.data?.detail || err.message || 'unknown error'
-                setImapTest({ status: 'error', message: `Save failed: ${detail}` })
-                return
+                saveOk = false
+                saveErr = err.response?.data?.detail || err.message || 'unknown'
               }
               try {
                 const r = await api.post('/profile/test-imap')
                 setImapTest({ status: 'ok', message: r.data.message })
               } catch (err) {
-                setImapTest({ status: 'error', message: err.response?.data?.detail || 'Connection failed' })
+                const testDetail = err.response?.data?.detail || 'Connection failed'
+                // If both save AND test failed, the user most likely needs
+                // to wait for any in-flight rescore. If save failed but the
+                // test endpoint returned a real "no credentials saved" /
+                // "wrong password" error, surface THAT — it's more actionable.
+                if (!saveOk && /no imap credentials/i.test(testDetail)) {
+                  setImapTest({ status: 'error', message: `Profile is still saving in the background. Wait ~30 seconds and try again. (Save error: ${saveErr})` })
+                } else {
+                  setImapTest({ status: 'error', message: testDetail })
+                }
               }
             }}
           >
