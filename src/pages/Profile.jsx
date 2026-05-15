@@ -171,6 +171,10 @@ export default function Profile() {
     update(key, next)
   }
 
+  // Returns true on success, false otherwise. handleSaveAndRescore relies
+  // on this to NOT show a fake "saved" message when the PUT actually failed
+  // (real bug we hit in production — the failure was being stomped by an
+  // unconditional success message from the rescore step).
   const handleSave = async () => {
     setSaving(true)
     setMessage({ text: '', type: '' })
@@ -181,15 +185,23 @@ export default function Profile() {
         preferences: prefs
       })
       setMessage({ text: '✓ Profile saved successfully!', type: 'success' })
+      return true
     } catch (err) {
-      setMessage({ text: '✗ Failed to save: ' + (err.response?.data?.detail || 'Unknown error'), type: 'error' })
+      const detail = err.response?.data?.detail
+        || err.message
+        || (err.code === 'ERR_NETWORK' ? 'Could not reach the server' : 'Unknown error')
+      const status = err.response?.status ? ` (HTTP ${err.response.status})` : ''
+      setMessage({ text: `✗ Failed to save: ${detail}${status}`, type: 'error' })
+      console.error('Profile save failed:', err.response?.status, err.response?.data, err.message)
+      return false
     } finally {
       setSaving(false)
     }
   }
 
   const handleSaveAndRescore = async () => {
-    await handleSave()
+    const ok = await handleSave()
+    if (!ok) return  // Don't overwrite the error message with fake success
     try {
       await api.post('/profile/rescore')
       setMessage({ text: '✓ Profile saved and jobs rescored!', type: 'success' })
