@@ -164,7 +164,7 @@ export default function Dashboard() {
   const toggleAutoApply = async () => {
     if (!autoApply.enabled) {
       if (!window.confirm(
-        'Enable Auto Apply?\n\nThis will automatically submit up to 10 real job applications per day from your top matches (score ≥ 6).\n\nMake sure your profile is complete before enabling.'
+        'Enable Auto Apply?\n\nThis will automatically submit up to 10 real job applications per day from your top matches (score ≥ 6) that pass your saved filters.\n\n• Saved FilterPanel chips (Experience / Keywords / Industries / Salary / Location / Excluded companies) → APPLY to Auto Apply\n• Quick toggles above the job list (Strong-8+ / Newest / Remote Only / Past 7d) → only affect what you see while browsing; Auto Apply ignores them\n\nMake sure your profile is complete before enabling.'
       )) return
     }
     setTogglingAuto(true)
@@ -630,6 +630,9 @@ export default function Dashboard() {
                 }}
                 onClick={toggleAutoApply}
                 disabled={togglingAuto}
+                title={autoApply.enabled
+                  ? 'Auto Apply is ON. Uses your saved FilterPanel filters (not the quick toggles below).'
+                  : 'Turn on Auto Apply to automatically submit applications matching your saved filters.'}
               >
                 <span style={s.autoApplyBtnLabel}>
                   <span style={{
