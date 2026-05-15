@@ -67,6 +67,11 @@ export default function Profile() {
     background_check: true, criminal_history: false, drivers_license: true, drug_test: true,
     // Email Verification
     imap_user: '', imap_pass: '',
+    // SECURITY: the backend never ships the cleartext IMAP password. This
+    // flag tells the UI "you have one saved" so we can render a "✓ Saved"
+    // hint and leave the input blank (typing a new value rotates it; an
+    // empty submit preserves what's already in the DB).
+    imap_pass_set: false,
   })
 
   useEffect(() => {
@@ -145,9 +150,12 @@ export default function Profile() {
         drivers_license: raw.drivers_license ?? true,
         drug_test: raw.drug_test ?? true,
         dashboard_filters: raw.dashboard_filters || {},
-        // Email Verification
+        // Email Verification — `imap_pass` is intentionally NOT pulled from
+        // the server payload anymore (it ships as `''` now). We use the
+        // boolean `imap_pass_set` flag to show whether one is saved.
         imap_user: raw.imap_user || '',
-        imap_pass: raw.imap_pass || '',
+        imap_pass: '',
+        imap_pass_set: !!raw.imap_pass_set,
       }
       setProfile(p)
       setForm(prev => ({
@@ -179,7 +187,8 @@ export default function Profile() {
     setSaving(true)
     setMessage({ text: '', type: '' })
     try {
-      const { first_name, last_name, email, resume_url, ...prefs } = form
+      // Exclude UI-only fields (imap_pass_set is server-derived, never sent back).
+      const { first_name, last_name, email, resume_url, imap_pass_set: _ignored, ...prefs } = form
       await api.put('/profile/', {
         name: `${first_name} ${last_name}`.trim(),
         preferences: prefs
@@ -594,16 +603,35 @@ export default function Profile() {
               onChange={e => update('imap_user', e.target.value)}
             />
           </Field>
-          <Field label="Gmail App Password">
+          <Field label={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              Gmail App Password
+              {form.imap_pass_set && (
+                <span style={{
+                  fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em',
+                  color: '#16A34A',
+                  background: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  padding: '2px 8px', borderRadius: '20px',
+                }}>
+                  ✓ Saved
+                </span>
+              )}
+            </span>
+          }>
             <input
               style={s.input}
               type="password"
               autoComplete="new-password"
-              placeholder="xxxx xxxx xxxx xxxx"
+              placeholder={form.imap_pass_set ? 'Leave blank to keep saved password — or type a new one' : 'xxxx xxxx xxxx xxxx'}
               value={form.imap_pass}
               onChange={e => update('imap_pass', e.target.value)}
             />
-            <p style={s.hint}>This is stored in your profile and only used to read verification emails. Never shared.</p>
+            <p style={s.hint}>
+              {form.imap_pass_set
+                ? 'For your security we never re-send the saved password. Type a new value to rotate it.'
+                : 'Stored encrypted in your profile and only used to read verification emails. Never shared.'}
+            </p>
           </Field>
           <button
             style={{...s.saveBtn, marginTop: '8px', width: 'auto', padding: '10px 20px', fontSize: '14px'}}
@@ -617,7 +645,8 @@ export default function Profile() {
               let saveOk = true
               let saveErr = null
               try {
-                const { first_name, last_name, email, resume_url, ...prefs } = form
+                // Exclude UI-only fields (imap_pass_set is server-derived, never sent back).
+      const { first_name, last_name, email, resume_url, imap_pass_set: _ignored, ...prefs } = form
                 await api.put('/profile/', {
                   name: `${first_name} ${last_name}`.trim(),
                   preferences: prefs,
