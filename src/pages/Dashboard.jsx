@@ -160,8 +160,13 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
+      // Pass the active ATS filter through so the backend can filter
+      // BEFORE the top-N truncation — otherwise low-volume ATSes (like
+      // Lever) get crowded out by Greenhouse's high-scored mass.
+      const jobsParams = { min_score: 1, limit: 200 }
+      if (atsFilter !== 'all') jobsParams.ats = atsFilter
       const [jobsRes, statsRes, perAtsRes] = await Promise.all([
-        api.get('/jobs/', { params: { min_score: 1, limit: 200 } }),
+        api.get('/jobs/', { params: jobsParams }),
         api.get('/jobs/stats'),
         // Per-ATS breakdown — best-effort; if it fails (e.g., transient
         // 500 from the new endpoint) we don't break the dashboard.
@@ -176,6 +181,14 @@ export default function Dashboard() {
       setLoading(false)
     }
   }
+
+  // Re-fetch when the ATS filter changes. We can't simply filter
+  // client-side because the top-200 fetch is dominated by Greenhouse;
+  // narrowing to Lever needs a fresh server-side query.
+  useEffect(() => {
+    if (!loading) loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atsFilter])
 
   const saveFilters = async (newFilters) => {
     try {
@@ -925,13 +938,13 @@ export default function Dashboard() {
 
               <div style={s.chipDivider} />
 
-              {/* ATS source chips — filter to one applier bucket. Useful
-                  when validating per-ATS, e.g. "show me only Lever jobs
-                  while I test the Lever applier." Clicking the active
-                  ATS again clears back to All. The `(N)` count is
-                  computed from the un-filtered allJobs list so the user
-                  sees the absolute population, not what would remain
-                  after their other filters. */}
+              {/* ATS source chips — filter to one applier bucket. Always
+                  render all 6: when active, the Dashboard re-fetches
+                  /jobs/?ats=X so even low-volume ATSes (e.g. Lever)
+                  become visible. Without this re-fetch, Greenhouse's
+                  mass-scored entries would crowd Lever out of the top
+                  200 every time. Clicking the active chip clears back
+                  to "All". */}
               {[
                 { key: 'greenhouse',      label: 'Greenhouse' },
                 { key: 'lever',           label: 'Lever' },
@@ -939,21 +952,17 @@ export default function Dashboard() {
                 { key: 'workday',         label: 'Workday' },
                 { key: 'smartrecruiters', label: 'SmartRecruiters' },
                 { key: 'generic',         label: 'Generic' },
-              ].map(({ key, label }) => {
-                const count = allJobs.filter(j => j.ats === key).length
-                if (count === 0) return null
-                return (
-                  <button
-                    key={key}
-                    style={{ ...s.chip, ...(atsFilter === key ? s.chipActive : {}) }}
-                    onClick={() => setAtsFilter(atsFilter === key ? 'all' : key)}
-                    type="button"
-                    title={`Filter to ${label} jobs only (${count} in your list)`}
-                  >
-                    {label} <span style={s.chipCount}>{count}</span>
-                  </button>
-                )
-              })}
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  style={{ ...s.chip, ...(atsFilter === key ? s.chipActive : {}) }}
+                  onClick={() => setAtsFilter(atsFilter === key ? 'all' : key)}
+                  type="button"
+                  title={`Filter the job list to ${label} only`}
+                >
+                  {label}
+                </button>
+              ))}
 
               <div style={s.chipDivider} />
 
