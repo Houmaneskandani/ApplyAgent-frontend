@@ -112,13 +112,18 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
             </div>
             <div>
               <div style={s.companyName}>{job.company}</div>
-              {job.source && (
+              {/* `ats` is the effective applier (Greenhouse / Lever / etc.)
+                  — what code path will fire on Apply. We show THIS, not
+                  the scrape source, because a job scraped from Indeed
+                  often redirects to a Greenhouse URL and gets applied
+                  through Greenhouse. Falls back to the scrape source if
+                  the backend hasn't sent `ats` yet (old cached payload). */}
+              {(job.ats || job.source) && (
                 <span style={{
                   ...s.sourceBadge,
-                  background: job.source === 'greenhouse' ? '#dcfce7' : '#dbeafe',
-                  color: job.source === 'greenhouse' ? '#15803d' : '#1d4ed8'
+                  ...atsBadgeStyle(job.ats || job.source),
                 }}>
-                  {job.source}
+                  {atsLabel(job.ats || job.source)}
                 </span>
               )}
             </div>
@@ -160,6 +165,28 @@ export default memo(JobCard, (prev, next) => (
   && prev.onApply === next.onApply
   && prev.onClick === next.onClick
 ))
+
+// ATS badge styling — one tone per applier bucket so the user can
+// recognize "yep, that's another Lever job" at a glance. Greenhouse
+// keeps the original green so existing screenshots still look right.
+function atsBadgeStyle(ats) {
+  switch ((ats || '').toLowerCase()) {
+    case 'greenhouse':      return { background: '#dcfce7', color: '#15803d' }
+    case 'lever':           return { background: '#dbeafe', color: '#1d4ed8' }
+    case 'ashby':           return { background: '#ede9fe', color: '#5b21b6' }
+    case 'workday':         return { background: '#fef3c7', color: '#92400e' }
+    case 'smartrecruiters': return { background: '#fce7f3', color: '#9d174d' }
+    case 'generic':         return { background: '#f3f4f6', color: '#374151' }
+    default:                return { background: '#f3f4f6', color: '#374151' }
+  }
+}
+function atsLabel(ats) {
+  const map = {
+    greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby',
+    workday: 'Workday', smartrecruiters: 'SmartRecruiters', generic: 'Other',
+  }
+  return map[(ats || '').toLowerCase()] || ats
+}
 
 function Spinner() {
   return (

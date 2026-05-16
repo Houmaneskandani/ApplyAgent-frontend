@@ -39,6 +39,10 @@ export default function Dashboard() {
   const [strongOnly, setStrongOnly] = useState(false)   // score >= 8
   const [postedWithinDays, setPostedWithinDays] = useState(0) // 0 = all
   const [quickRemote, setQuickRemote] = useState(false)
+  // ATS quick-filter: filter the job list to one applier bucket. Used
+  // mainly for the validation flow ("show me only Lever jobs so I can
+  // test the Lever applier"). Ephemeral — not saved to preferences.
+  const [atsFilter, setAtsFilter] = useState('all')  // 'all' | 'greenhouse' | 'lever' | ...
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   // Per-ATS performance breakdown — fetched alongside other dashboard
@@ -442,6 +446,11 @@ export default function Dashboard() {
       const cutoff = Date.now() - postedWithinDays * 24 * 60 * 60 * 1000
       jobs = jobs.filter(j => j.created_at && new Date(j.created_at).getTime() >= cutoff)
     }
+    // ATS quick-filter — narrows to one applier bucket. The backend
+    // emits `j.ats` using the same dispatcher logic that decides which
+    // applier code path fires on Apply, so this filter shows EXACTLY
+    // the jobs that would be handled by the chosen applier.
+    if (atsFilter !== 'all') jobs = jobs.filter(j => j.ats === atsFilter)
 
     // ── 4. Keywords from FilterPanel ────────────────────────────
     // Fixed: also search description snippet. Previously only title+company
@@ -542,7 +551,7 @@ export default function Dashboard() {
       jobs.sort((a, b) => (b.score || 0) - (a.score || 0))
     }
     return jobs
-  }, [allJobs, tab, filters, sortBy, search, strongOnly, quickRemote, postedWithinDays])
+  }, [allJobs, tab, filters, sortBy, search, strongOnly, quickRemote, postedWithinDays, atsFilter])
 
   // No full-screen spinner — render the page chrome and skeleton job cards
   // so users on cold-start Railway requests don't stare at a blank purple
@@ -563,6 +572,7 @@ export default function Dashboard() {
     setStrongOnly(false)
     setQuickRemote(false)
     setPostedWithinDays(0)
+    setAtsFilter('all')
   }
 
   const activeCount = (filters.keywords?.length || 0)
@@ -769,7 +779,7 @@ export default function Dashboard() {
               {/* Clear all filters — visible whenever ANY filter, search,
                   or quick-toggle is active. One click resets everything to
                   the wide-open default view. */}
-              {(activeCount > 0 || search.trim() || strongOnly || quickRemote || postedWithinDays > 0) && (
+              {(activeCount > 0 || search.trim() || strongOnly || quickRemote || postedWithinDays > 0 || atsFilter !== 'all') && (
                 <button
                   type="button"
                   style={s.clearFiltersBtn}
@@ -912,6 +922,38 @@ export default function Dashboard() {
                 onClick={() => setPostedWithinDays(postedWithinDays === 1 ? 0 : 1)}
                 type="button"
               >🔥 Past 24h</button>
+
+              <div style={s.chipDivider} />
+
+              {/* ATS source chips — filter to one applier bucket. Useful
+                  when validating per-ATS, e.g. "show me only Lever jobs
+                  while I test the Lever applier." Clicking the active
+                  ATS again clears back to All. The `(N)` count is
+                  computed from the un-filtered allJobs list so the user
+                  sees the absolute population, not what would remain
+                  after their other filters. */}
+              {[
+                { key: 'greenhouse',      label: 'Greenhouse' },
+                { key: 'lever',           label: 'Lever' },
+                { key: 'ashby',           label: 'Ashby' },
+                { key: 'workday',         label: 'Workday' },
+                { key: 'smartrecruiters', label: 'SmartRecruiters' },
+                { key: 'generic',         label: 'Generic' },
+              ].map(({ key, label }) => {
+                const count = allJobs.filter(j => j.ats === key).length
+                if (count === 0) return null
+                return (
+                  <button
+                    key={key}
+                    style={{ ...s.chip, ...(atsFilter === key ? s.chipActive : {}) }}
+                    onClick={() => setAtsFilter(atsFilter === key ? 'all' : key)}
+                    type="button"
+                    title={`Filter to ${label} jobs only (${count} in your list)`}
+                  >
+                    {label} <span style={s.chipCount}>{count}</span>
+                  </button>
+                )
+              })}
 
               <div style={s.chipDivider} />
 
@@ -1673,6 +1715,15 @@ const s = {
     background: 'rgba(196,181,253,0.4)',
     margin: '0 4px',
     flexShrink: 0,
+  },
+  // Small count appended to ATS chips: "Lever 12". Lighter weight
+  // than the chip label and faded so it reads as secondary info.
+  chipCount: {
+    marginLeft: 5,
+    fontSize: 11,
+    fontWeight: 500,
+    opacity: 0.65,
+    fontVariantNumeric: 'tabular-nums',
   },
 
   // ─── Clickable stat (Strong matches → toggle filter) ────────────────
