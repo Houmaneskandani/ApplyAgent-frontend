@@ -951,6 +951,7 @@ export default function Dashboard() {
                 { key: 'ashby',           label: 'Ashby' },
                 { key: 'workday',         label: 'Workday' },
                 { key: 'smartrecruiters', label: 'SmartRecruiters' },
+                { key: 'ziprecruiter',    label: 'ZipRecruiter' },
                 { key: 'generic',         label: 'Generic' },
               ].map(({ key, label }) => (
                 <button

@@ -176,6 +176,7 @@ function atsBadgeStyle(ats) {
     case 'ashby':           return { background: '#ede9fe', color: '#5b21b6' }
     case 'workday':         return { background: '#fef3c7', color: '#92400e' }
     case 'smartrecruiters': return { background: '#fce7f3', color: '#9d174d' }
+    case 'ziprecruiter':    return { background: '#ccfbf1', color: '#0f766e' }
     case 'generic':         return { background: '#f3f4f6', color: '#374151' }
     default:                return { background: '#f3f4f6', color: '#374151' }
   }
@@ -183,7 +184,8 @@ function atsBadgeStyle(ats) {
 function atsLabel(ats) {
   const map = {
     greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby',
-    workday: 'Workday', smartrecruiters: 'SmartRecruiters', generic: 'Other',
+    workday: 'Workday', smartrecruiters: 'SmartRecruiters',
+    ziprecruiter: 'ZipRecruiter', generic: 'Other',
   }
   return map[(ats || '').toLowerCase()] || ats
 }
