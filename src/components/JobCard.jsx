@@ -134,8 +134,8 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
         <div style={s.right}>
           <div style={s.score}>{job.score}/10</div>
           <button
-            onClick={e => { e.stopPropagation(); if (!isApplied && !isApplying) onApply(job.id) }}
-            disabled={isApplied || isApplying}
+            onClick={e => { e.stopPropagation(); if (!isApplied && !isApplying && !inQueue) onApply(job.id) }}
+            disabled={isApplied || isApplying || inQueue}
             style={btnStyle}
           >
             {isApplying ? <Spinner /> : <span>⚡</span>}
@@ -162,8 +162,11 @@ export default memo(JobCard, (prev, next) => (
   && prev.applying === next.applying
   && prev.queueState?.status === next.queueState?.status
   && prev.queueState?.queue_position === next.queueState?.queue_position
-  && prev.onApply === next.onApply
-  && prev.onClick === next.onClick
+  // NOTE: deliberately NOT comparing onApply/onClick identity. The parent
+  // recreates those handlers on every render (queue polling every 2-5s), so
+  // including them busted the memo and re-rendered all ~200 cards each poll.
+  // The handlers are pure (they call back with job.id), so identity is safe
+  // to ignore here.
 ))
 
 // ATS badge styling — one tone per applier bucket so the user can

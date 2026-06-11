@@ -20,7 +20,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [applying, setApplying] = useState(null)
   const [scraping, setScraping] = useState(false)
-  const [liveMode, setLiveMode] = useState(true)
+  // Default to DRY RUN. The confirm dialog only guards the dry→live toggle, so
+  // defaulting to live meant a brand-new user's first "Apply Me" submitted a
+  // REAL application with no confirmation. Start safe; the user opts into live.
+  const [liveMode, setLiveMode] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [selectedJob, setSelectedJob] = useState(null)
   const [queue, setQueue] = useState([]) // [{job_id, status, queue_position, title, company, source, dry_run}]
@@ -52,6 +55,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const queuePollRef = useRef(null)
+  const scrapePollRef = useRef(null)
 
   // PERF: memoize so unrelated state changes (filter chip clicks, search
   // params, applying flips) don't rebuild this object every render — which
@@ -175,8 +179,14 @@ export default function Dashboard() {
       setAllJobs(jobsRes.data)
       setStats(statsRes.data)
       setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
-    } catch {
-      navigate('/login')
+    } catch (err) {
+      // Only an AUTH failure should bounce to /login — the axios 401
+      // interceptor already handles that globally. A transient 500 / network
+      // blip must NOT log the user out (their token is still valid); show an
+      // error toast and keep them on the page so a refresh can recover.
+      if (err?.response?.status !== 401) {
+        toast.error('Could not load jobs — check your connection and refresh.')
+      }
     } finally {
       setLoading(false)
     }
@@ -359,6 +369,7 @@ export default function Dashboard() {
       if (resolved) return
       resolved = true
       clearInterval(poll)
+      scrapePollRef.current = null
       toast.dismiss(t)
       if (kind === 'success') toast.success(msg)
       else if (kind === 'error') toast.error(msg)
@@ -376,7 +387,7 @@ export default function Dashboard() {
     }
 
     let lastScored = startScored
-    poll = setInterval(async () => {
+    poll = setInterval(async () => {  // stored in scrapePollRef for unmount cleanup
       // Hard timeout
       if (Date.now() - start > 4 * 60 * 1000) {
         finish('Still running in the background — check back in a minute', 'info')
@@ -388,16 +399,19 @@ export default function Dashboard() {
         setStats(r.data)
         const newJobs = (r.data.total_jobs || 0) - startTotal
         const newScored = (r.data.scored || 0) - startScored
-        // If new jobs have been SCORED (not just scraped), refresh the
-        // visible list so they appear in real-time.
+        // Capture the PREVIOUS poll's count BEFORE updating, so the "did it
+        // stop moving?" check below is meaningful. (Previously lastScored was
+        // reassigned first, making `scored === lastScored` always true and
+        // finishing the scrape at the very first 30s poll — usually with a
+        // misleading "no new jobs".)
+        const prevScored = lastScored
         if (r.data.scored > lastScored) {
           lastScored = r.data.scored
           await loadData()
         }
-        // Done heuristic: after at least 30s, if scored hasn't moved in
-        // 20s, we assume the scrape finished. (Reliable signal would be
-        // a server-side flag, but this is good enough.)
-        if (Date.now() - start > 30000 && r.data.scored === lastScored) {
+        // Done heuristic: after >=30s, if scored didn't move since the
+        // previous poll, assume the scrape finished.
+        if (Date.now() - start > 30000 && r.data.scored === prevScored) {
           if (newJobs > 0) {
             finish(`Found ${newJobs} new ${newJobs === 1 ? 'job' : 'jobs'}, ${newScored > 0 ? `${newScored} new matches scored` : 'all already scored'}`)
           } else if (newScored > 0) {
@@ -410,7 +424,14 @@ export default function Dashboard() {
         // Network blip — keep trying. Don't kill the whole flow.
       }
     }, 10000)
+    scrapePollRef.current = poll
   }, [scraping, stats])
+
+  // Clear the scrape poll if the user navigates away mid-scrape — otherwise
+  // the interval keeps calling setState/loadData on an unmounted component.
+  useEffect(() => () => {
+    if (scrapePollRef.current) clearInterval(scrapePollRef.current)
+  }, [])
 
   // Auto-refresh when the user switches BACK to this browser tab. Saves a
   // manual reload when they've been off in another tab while the worker was
