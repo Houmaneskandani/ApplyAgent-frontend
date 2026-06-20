@@ -6,7 +6,17 @@ import Navbar from '../components/Navbar'
 // hex; pulling from theme.js means a future palette swap is one file.
 import { colors } from '../theme'
 
-const SECTIONS = ['Basics', 'Education', 'Portfolio & Links', 'Location', 'Previous Work', 'Behavioral', 'Demographic', 'Legal', 'Email Verification']
+const SECTIONS = ['Basics', 'Target Roles', 'Education', 'Portfolio & Links', 'Location', 'Previous Work', 'Behavioral', 'Demographic', 'Legal', 'Email Verification']
+
+// Mirrors job_categories.py JOB_CATEGORIES (keys must match the backend — the
+// scheduler reads preferences.job_categories to drive search queries, the
+// title filter, AND the scoring prompt). Keep in sync if the backend adds one.
+const JOB_CATEGORY_OPTIONS = [
+  { value: 'software_engineering', label: '💻 Software Engineering', desc: 'SWE, backend, frontend, full-stack, mobile' },
+  { value: 'it_helpdesk_sysadmin', label: '🛠️ IT / Help Desk / Sysadmin', desc: 'Support, desktop, systems & network admin' },
+  { value: 'devops_cloud_sre', label: '☁️ DevOps / Cloud / SRE', desc: 'DevOps, cloud, platform, reliability' },
+  { value: 'data_analytics', label: '📊 Data / Analytics', desc: 'Data analyst/engineer, BI, analytics' },
+]
 
 const SKILLS_LIST = ['Python', 'Go', 'Golang', 'JavaScript', 'TypeScript', 'Java', 'C++', 'Ruby', 'Rust', 'Swift', 'Kotlin', 'SQL', 'GraphQL', 'REST APIs', 'PostgreSQL', 'MongoDB', 'Redis', 'MySQL', 'AWS', 'GCP', 'Azure', 'Docker', 'Kubernetes', 'CI/CD', 'Linux', 'Backend', 'Frontend', 'Full Stack', 'DevOps', 'ML/AI', 'Data Engineering', 'Mobile', 'React', 'Node.js', 'Django', 'FastAPI', 'Spring Boot']
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Mandarin', 'Japanese', 'Korean', 'Arabic', 'Portuguese', 'Russian', 'Hindi', 'Italian']
@@ -45,6 +55,9 @@ export default function Profile() {
     first_name: '', last_name: '', email: '', phone: '',
     preferred_name: '',
     salary_min: '', salary_max: '',
+    // Target Roles — which job categories the bot searches/scores, and whether
+    // to also accept roles below the user's seniority.
+    job_categories: [], open_to_lower_level: false,
     // Education
     degree: "Bachelor's", major: '', school: '', graduation_year: '',
     // Portfolio
@@ -95,6 +108,9 @@ export default function Profile() {
         preferred_name: raw.preferred_name || '',
         salary_min: raw.salary_min || '',
         salary_max: raw.salary_max || '',
+        // Target Roles
+        job_categories: Array.isArray(raw.job_categories) ? raw.job_categories : [],
+        open_to_lower_level: raw.open_to_lower_level ?? false,
         // Education
         degree: raw.degree || "Bachelor's",
         major: raw.major || '',
@@ -275,6 +291,42 @@ export default function Profile() {
               </Field>
             </div>
           </div>
+        </div>
+      )
+
+      case 'Target Roles': return (
+        <div style={s.sectionBody}>
+          <h2 style={s.sectionTitle}>Target Roles</h2>
+          <p style={s.sectionSubtitle}>
+            Pick the kinds of jobs the bot searches for and scores. Leave all
+            unchecked to default to Software Engineering.
+          </p>
+          <Field label="Job categories">
+            <div style={s.workPrefGrid}>
+              {JOB_CATEGORY_OPTIONS.map(opt => {
+                const selected = (form.job_categories || []).includes(opt.value)
+                return (
+                  <div key={opt.value} onClick={() => toggleArrayItem('job_categories', opt.value)}
+                    role="checkbox" aria-checked={selected} tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleArrayItem('job_categories', opt.value) } }}
+                    style={{...s.workPrefCard, ...(selected ? s.workPrefCardActive : {})}}>
+                    <span style={s.workPrefIcon}>{opt.label}</span>
+                    <span style={s.workPrefDesc}>{opt.desc}</span>
+                    {selected && <span style={s.workPrefCheck}>✓</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </Field>
+          <Field label="Also apply to roles below my seniority?">
+            <YesNo value={form.open_to_lower_level} onChange={v => update('open_to_lower_level', v)} />
+            <p style={{...s.sectionSubtitle, marginTop: 8}}>
+              On = the scorer won't penalize a strong title match just because
+              it's a level or two junior (e.g. a senior engineer accepting
+              mid-level or IT/support roles). Selecting any non-SWE category
+              above already turns this on automatically.
+            </p>
+          </Field>
         </div>
       )
 
