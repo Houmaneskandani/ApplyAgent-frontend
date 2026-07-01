@@ -953,7 +953,7 @@ export default function Dashboard() {
                 <span style={s.searchIcon} aria-hidden="true">🔍</span>
                 <input
                   type="text"
-                  placeholder="Search title, company, location, or description…"
+                  placeholder="Search title, company, or location…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   style={s.searchInput}
