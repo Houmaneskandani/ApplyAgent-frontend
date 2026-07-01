@@ -39,6 +39,10 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState('score') // 'score' | 'date'
   // Quick-filter state (separate from FilterPanel filters so they're easy to clear)
   const [search, setSearch] = useState('')
+  // Debounced copy of `search` — this is what we send to the SERVER (so a
+  // location/keyword search queries the whole DB, not just the loaded slice).
+  // Debounced ~300ms so typing doesn't fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [strongOnly, setStrongOnly] = useState(false)   // score >= 8
   const [postedWithinDays, setPostedWithinDays] = useState(0) // 0 = all
   const [quickRemote, setQuickRemote] = useState(false)
@@ -56,6 +60,7 @@ export default function Dashboard() {
   const [searchParams] = useSearchParams()
   const queuePollRef = useRef(null)
   const scrapePollRef = useRef(null)
+  const loadReqIdRef = useRef(0)  // latest-wins guard for concurrent loadData calls
 
   // PERF: memoize so unrelated state changes (filter chip clicks, search
   // params, applying flips) don't rebuild this object every render — which
@@ -73,6 +78,12 @@ export default function Dashboard() {
   useEffect(() => {
     if (searchParams.get('tab') === 'filters') setShowFilters(true)
   }, [searchParams])
+
+  // Debounce the search box → debouncedSearch (the value we send to the server).
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Poll queue — every 2s while something is applying, every 5s otherwise
   const hasApplying = queue.some(q => q.status === 'applying')
@@ -154,8 +165,21 @@ export default function Dashboard() {
       try {
         const res = await api.get('/profile/')
         const prefs = res.data.preferences || {}
-        if (prefs.dashboard_filters) {
-          setFilters(prefs.dashboard_filters)
+        const df = prefs.dashboard_filters
+        if (df) {
+          setFilters(df)
+          // Tell the user their SAVED filters are active — otherwise a saved
+          // "Seattle" narrows the list on every load with no visible reason.
+          const active = []
+          if (df.location?.trim()) active.push(`📍 ${df.location.trim()}`)
+          if (df.keywords?.length) active.push(...df.keywords)
+          if (df.experience?.length) active.push(...df.experience)
+          if (df.work_type?.length) active.push(...df.work_type)
+          if (active.length) {
+            toast(`Showing your saved filters: ${active.join(' · ')}`, {
+              icon: '🔎', duration: 5000,
+            })
+          }
         }
       } catch {}
     }
@@ -163,12 +187,24 @@ export default function Dashboard() {
   }, [])
 
   const loadData = async () => {
+    // Latest-wins: multiple triggers (mount, filter change, poll, focus, queue
+    // drain) can call loadData concurrently. Tag each request and drop stale
+    // responses so an in-flight UNFILTERED fetch can never overwrite the
+    // results of a newer FILTERED one (the race that made a saved Seattle
+    // filter briefly show the wrong jobs on first load).
+    const myReqId = ++loadReqIdRef.current
     try {
       // Pass the active ATS filter through so the backend can filter
       // BEFORE the top-N truncation — otherwise low-volume ATSes (like
       // Lever) get crowded out by Greenhouse's high-scored mass.
       const jobsParams = { min_score: 1, limit: 200 }
       if (atsFilter !== 'all') jobsParams.ats = atsFilter
+      // Push location + search to the SERVER so they filter the WHOLE scored
+      // set BEFORE the top-200 cap — otherwise a city/keyword only ever
+      // searches the 200 highest-scored jobs already downloaded (which is why
+      // "Seattle" used to show nothing despite 400+ Seattle jobs existing).
+      if (filters.location?.trim()) jobsParams.location = filters.location.trim()
+      if (debouncedSearch) jobsParams.search = debouncedSearch
       const [jobsRes, statsRes, perAtsRes] = await Promise.all([
         api.get('/jobs/', { params: jobsParams }),
         api.get('/jobs/stats'),
@@ -176,10 +212,12 @@ export default function Dashboard() {
         // 500 from the new endpoint) we don't break the dashboard.
         api.get('/jobs/stats/per-ats').catch(() => ({ data: { per_ats: [], total_attempts: 0 } })),
       ])
+      if (myReqId !== loadReqIdRef.current) return  // superseded by a newer load
       setAllJobs(jobsRes.data)
       setStats(statsRes.data)
       setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
     } catch (err) {
+      if (myReqId !== loadReqIdRef.current) return  // superseded — ignore stale error
       // Only an AUTH failure should bounce to /login — the axios 401
       // interceptor already handles that globally. A transient 500 / network
       // blip must NOT log the user out (their token is still valid); show an
@@ -188,17 +226,28 @@ export default function Dashboard() {
         toast.error('Could not load jobs — check your connection and refresh.')
       }
     } finally {
-      setLoading(false)
+      if (myReqId === loadReqIdRef.current) setLoading(false)
     }
   }
 
-  // Re-fetch when the ATS filter changes. We can't simply filter
-  // client-side because the top-200 fetch is dominated by Greenhouse;
-  // narrowing to Lever needs a fresh server-side query.
+  // Re-fetch whenever a SERVER-SIDE filter changes (ATS bucket, location, or
+  // the debounced search term). These can't be resolved client-side because
+  // the top-200 fetch is score-truncated — narrowing to Lever / a city /
+  // a keyword needs a fresh server query so the LIMIT selects the matching
+  // rows, not "matching rows that happen to be in the global top-200".
+  // Keyed on a serialized signature so unrelated (client-only) filter changes
+  // like experience/work_type do NOT trigger a network round-trip.
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}`
+  const filterSigMountedRef = useRef(false)
   useEffect(() => {
-    if (!loading) loadData()
+    // Skip the first run — the mount effect already did the initial fetch.
+    // On every later change, ALWAYS refetch (even if a load is still in flight);
+    // latest-wins in loadData drops the stale response, so a saved filter that
+    // loads mid-initial-fetch still wins.
+    if (!filterSigMountedRef.current) { filterSigMountedRef.current = true; return }
+    loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atsFilter])
+  }, [serverFilterSig])
 
   const saveFilters = async (newFilters) => {
     try {
@@ -433,19 +482,39 @@ export default function Dashboard() {
     if (scrapePollRef.current) clearInterval(scrapePollRef.current)
   }, [])
 
-  // Auto-refresh when the user switches BACK to this browser tab. Saves a
-  // manual reload when they've been off in another tab while the worker was
-  // scraping or applying. Skipped if a scrape is actively in progress —
-  // runScrape handles its own refresh cadence.
+  // Keep refs to the latest loadData + "busy" flag so the timers below always
+  // use the CURRENT filters and never fire mid-action. loadData isn't memoized,
+  // so capturing it in a []-deps effect would freeze it at the initial (empty)
+  // filters and a background poll would clobber the user's filtered view.
+  const loadDataRef = useRef(loadData)
+  loadDataRef.current = loadData
+  const busyRef = useRef(false)
+  busyRef.current = loading || refreshing || scraping || hasApplying
+
+  // Auto-refresh the job list — on tab re-focus AND a periodic poll — so new
+  // jobs (the worker adds ~125/day) appear on their own, like a real job board,
+  // with no manual reload. Skipped while a scrape/apply/refresh is in flight so
+  // a background fetch can't overwrite an in-progress user action, throttled so
+  // focus + visibilitychange can't double-fire, and cleared on unmount.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && !scraping) {
-        loadData()
-      }
+    let last = 0
+    const maybeRefresh = () => {
+      if (document.visibilityState !== 'visible' || busyRef.current) return
+      const now = Date.now()
+      if (now - last < 3000) return
+      last = now
+      loadDataRef.current()
     }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [scraping])
+    const id = setInterval(maybeRefresh, 45000)
+    document.addEventListener('visibilitychange', maybeRefresh)
+    window.addEventListener('focus', maybeRefresh)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', maybeRefresh)
+      window.removeEventListener('focus', maybeRefresh)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Filter + sort. Every filter the FilterPanel collects is now applied
   // (previously industries/salary/job_type were dead). Every filter uses
@@ -1099,7 +1168,29 @@ export default function Dashboard() {
               <div style={s.empty}>
                 <div style={s.emptyIcon}>🔍</div>
                 <div style={s.emptyTitle}>No jobs match your filters</div>
-                <div style={s.emptyText}>Try adjusting your filters or run the scraper for more jobs</div>
+                {(() => {
+                  // Name the ACTIVE filters so an empty list reads as "your
+                  // filters are narrow" (fixable) rather than "there are no
+                  // jobs" (alarming). Disambiguates a filter from a truly
+                  // empty result now that filtering happens server-side.
+                  const active = []
+                  if (filters.location?.trim()) active.push(`📍 ${filters.location.trim()}`)
+                  if (search.trim()) active.push(`“${search.trim()}”`)
+                  if (filters.keywords?.length) active.push(...filters.keywords)
+                  if (filters.experience?.length) active.push(...filters.experience)
+                  if (filters.work_type?.length) active.push(...filters.work_type)
+                  if (strongOnly) active.push('Score 8+')
+                  if (quickRemote) active.push('Remote only')
+                  if (postedWithinDays > 0) active.push(`Past ${postedWithinDays}d`)
+                  if (atsFilter !== 'all') active.push(atsFilter)
+                  return active.length ? (
+                    <div style={s.emptyText}>
+                      Active filters: <strong>{active.join(' · ')}</strong>. Clear them to see more.
+                    </div>
+                  ) : (
+                    <div style={s.emptyText}>Run the scraper to pull in more jobs.</div>
+                  )
+                })()}
                 <button style={s.emptyBtn} onClick={clearFilters}>
                   Clear filters
                 </button>
