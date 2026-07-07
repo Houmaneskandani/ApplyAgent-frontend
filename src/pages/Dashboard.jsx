@@ -31,6 +31,14 @@ export default function Dashboard() {
   // defaulting to live meant a brand-new user's first "Apply Me" submitted a
   // REAL application with no confirmation. Start safe; the user opts into live.
   const [liveMode, setLiveMode] = useState(false)
+  // Ref mirror of liveMode. JobCard is memoized and deliberately ignores the
+  // onApply handler's identity, so a card rendered while liveMode was false
+  // keeps a handler that captured liveMode=false FOREVER — clicking Apply
+  // after toggling Live Mode ON would still submit dry_run=true (the bug that
+  // silently turned a live application batch into rehearsals). Reading the ref
+  // instead of the captured value makes even a stale handler see current mode.
+  const liveModeRef = useRef(false)
+  liveModeRef.current = liveMode
   const [showFilters, setShowFilters] = useState(false)
   const [selectedJob, setSelectedJob] = useState(null)
   const [queue, setQueue] = useState([]) // [{job_id, status, queue_position, title, company, source, dry_run}]
@@ -369,8 +377,11 @@ export default function Dashboard() {
 
   const applyToJob = async (jobId) => {
     setApplying(jobId)
+    // Read the CURRENT mode from the ref — never the value captured when this
+    // handler closure was created (memoized cards hold stale closures).
+    const live = liveModeRef.current
     try {
-      const res = await api.post(`/apply/${jobId}?dry_run=${!liveMode}`)
+      const res = await api.post(`/apply/${jobId}?dry_run=${!live}`)
       const { position } = res.data
       // Refresh queue immediately
       api.get('/queue/').then(r => setQueue(r.data)).catch(() => {})
@@ -380,7 +391,7 @@ export default function Dashboard() {
       // Be LOUD about dry-run mode: a user once queued 20+ jobs overnight
       // believing they were applying — they were rehearsals. One clear toast
       // per queue action prevents a wasted night of intent.
-      if (!liveMode) {
+      if (!live) {
         toast('🧪 Queued as DRY RUN — practice only, nothing is submitted. Switch ⚫ Dry Run → 🔴 Live Mode to apply for real.', {
           duration: 6000, id: 'dry-run-notice',
         })

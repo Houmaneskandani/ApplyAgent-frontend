@@ -170,8 +170,11 @@ export default memo(JobCard, (prev, next) => (
   // NOTE: deliberately NOT comparing onApply/onClick identity. The parent
   // recreates those handlers on every render (queue polling every 2-5s), so
   // including them busted the memo and re-rendered all ~200 cards each poll.
-  // The handlers are pure (they call back with job.id), so identity is safe
-  // to ignore here.
+  // Because we ignore handler identity, a rendered card keeps its ORIGINAL
+  // handler closure — so the handler must NOT close over mutable state like
+  // Live Mode directly; the parent reads such state from a ref at call time
+  // (see liveModeRef in Dashboard.jsx). Do not "simplify" that back to a
+  // captured value or live/dry-run selection breaks silently.
 ))
 
 // ATS badge styling — one tone per applier bucket so the user can
