@@ -43,6 +43,18 @@ export default function Dashboard() {
   // location/keyword search queries the whole DB, not just the loaded slice).
   // Debounced ~300ms so typing doesn't fire a request per keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  // "Where" input (Indeed-style). Local state while typing; committed to
+  // filters.location (and saved) after a pause so we don't refetch + PUT the
+  // profile on every keystroke.
+  const [locInput, setLocInput] = useState('')
+  // Total matches on the server BEFORE the 200-row cap (X-Total-Count) —
+  // powers "N jobs found" so an abridged list is never mistaken for the
+  // whole corpus.
+  const [totalCount, setTotalCount] = useState(null)
+  // True while a filter-triggered refetch is in flight — dims the stale list
+  // so the user SEES the search happening (previously the old list just sat
+  // there unchanged until the response landed).
+  const [isFetching, setIsFetching] = useState(false)
   const [strongOnly, setStrongOnly] = useState(false)   // score >= 8
   const [postedWithinDays, setPostedWithinDays] = useState(0) // 0 = all
   const [quickRemote, setQuickRemote] = useState(false)
@@ -88,6 +100,27 @@ export default function Dashboard() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
     return () => clearTimeout(t)
   }, [search])
+
+  // Debounce the Where input → filters.location (refetch) + persist. Skips
+  // the no-op case so loading saved filters doesn't immediately re-save them.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const v = locInput.trim()
+      if (v === (filters.location || '').trim()) return
+      const next = { ...filters, location: v }
+      setFilters(next)
+      saveFilters(next)
+    }, 500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locInput])
+
+  // Keep the Where input in sync when filters arrive from the profile load
+  // or get cleared elsewhere (Clear filters, chip ✕).
+  useEffect(() => {
+    setLocInput(filters.location || '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.location])
 
   // Poll queue — every 2s while something is applying, every 5s otherwise
   const hasApplying = queue.some(q => q.status === 'applying')
@@ -210,6 +243,13 @@ export default function Dashboard() {
       if (filters.location?.trim()) jobsParams.location = filters.location.trim()
       if (debouncedSearch) jobsParams.search = debouncedSearch
       if (jobMode !== 'all') jobsParams.category = jobMode
+      // Server-side sort + freshness window: "Newest" and "Past 24h/7d" must
+      // query the WHOLE corpus — the all-time score ranking is dominated by
+      // old high scores, so purely client-side these controls could never
+      // surface a new job.
+      jobsParams.sort = sortBy === 'date' ? 'date' : 'score'
+      if (postedWithinDays > 0) jobsParams.posted_within_days = postedWithinDays
+      setIsFetching(true)
       const [jobsRes, statsRes, perAtsRes] = await Promise.all([
         api.get('/jobs/', { params: jobsParams }),
         api.get('/jobs/stats'),
@@ -219,6 +259,8 @@ export default function Dashboard() {
       ])
       if (myReqId !== loadReqIdRef.current) return  // superseded by a newer load
       setAllJobs(jobsRes.data)
+      const t = parseInt(jobsRes.headers?.['x-total-count'], 10)
+      setTotalCount(Number.isFinite(t) ? t : null)
       setStats(statsRes.data)
       setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
     } catch (err) {
@@ -231,7 +273,10 @@ export default function Dashboard() {
         toast.error('Could not load jobs — check your connection and refresh.')
       }
     } finally {
-      if (myReqId === loadReqIdRef.current) setLoading(false)
+      if (myReqId === loadReqIdRef.current) {
+        setLoading(false)
+        setIsFetching(false)
+      }
     }
   }
 
@@ -242,7 +287,7 @@ export default function Dashboard() {
   // rows, not "matching rows that happen to be in the global top-200".
   // Keyed on a serialized signature so unrelated (client-only) filter changes
   // like experience/work_type do NOT trigger a network round-trip.
-  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}`
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}`
   const filterSigMountedRef = useRef(false)
   useEffect(() => {
     // Skip the first run — the mount effect already did the initial fetch.
@@ -973,6 +1018,27 @@ export default function Dashboard() {
                   >✕</button>
                 )}
               </div>
+              {/* "Where" — Indeed's What/Where pattern. Edits filters.location
+                  (debounced), which the server applies across the WHOLE corpus. */}
+              <div style={{ ...s.searchWrap, flex: '0 1 260px' }}>
+                <span style={s.searchIcon} aria-hidden="true">📍</span>
+                <input
+                  type="text"
+                  placeholder="City, state, or “remote”"
+                  value={locInput}
+                  onChange={e => setLocInput(e.target.value)}
+                  style={s.searchInput}
+                  aria-label="Filter by location"
+                />
+                {locInput && (
+                  <button
+                    style={s.searchClear}
+                    onClick={() => setLocInput('')}
+                    aria-label="Clear location"
+                    type="button"
+                  >✕</button>
+                )}
+              </div>
               <button
                 style={{ ...s.refreshBtn, opacity: refreshing ? 0.6 : 1 }}
                 onClick={refreshJobs}
@@ -1190,7 +1256,20 @@ export default function Dashboard() {
             )}
           </div>
         ) : (
-          <div style={s.jobList}>
+          <div style={{
+            ...s.jobList,
+            // Dim while a filter-triggered refetch is in flight — instant
+            // feedback that the search is running (Indeed dims + swaps count).
+            ...(isFetching ? { opacity: 0.45, pointerEvents: 'none', transition: 'opacity 0.15s' } : { transition: 'opacity 0.15s' }),
+          }}>
+            {tab === 'Job Matches' && totalCount !== null && (
+              <div style={s.resultsBar} aria-live="polite">
+                {isFetching
+                  ? 'Searching…'
+                  : `${totalCount.toLocaleString()} job${totalCount === 1 ? '' : 's'} found` +
+                    (totalCount > allJobs.length ? ` · showing top ${allJobs.length}` : '')}
+              </div>
+            )}
             {filteredJobs.length === 0 ? (
               <div style={s.empty}>
                 <div style={s.emptyIcon}>🔍</div>
@@ -1847,6 +1926,12 @@ const s = {
     background: 'linear-gradient(135deg, #6D28D9, #4F46E5)',
     color: '#fff',
     boxShadow: '0 4px 12px rgba(79, 70, 229, 0.30)',
+  },
+  resultsBar: {
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: '#6B7280',
+    padding: '2px 4px 8px',
   },
   chip: {
     display: 'inline-flex',

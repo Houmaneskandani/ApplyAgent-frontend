@@ -69,6 +69,11 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
           <div style={s.titleRow}>
             <h3 style={s.title}>{job.title}</h3>
             {job.score >= 8 && <span style={s.matchBadge}>✓ Strong match</span>}
+            {/* Freshness badge — added to our index in the last 48h. Distinct
+                from the "New" status pill (which just means "not applied"). */}
+            {job.created_at && (Date.now() - new Date(job.created_at).getTime()) < 48 * 3600 * 1000 && (
+              <span style={s.freshBadge}>🆕 New</span>
+            )}
           </div>
 
           <div style={s.pillRow}>
@@ -215,6 +220,7 @@ const s = {
   titleRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' },
   title: { fontSize: '16px', fontWeight: '600', color: '#111' },
   matchBadge: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 8px', borderRadius: '20px', border: '1px solid #C4B5FD', fontWeight: '600' },
+  freshBadge: { fontSize: '11px', background: '#ECFDF5', color: '#047857', padding: '2px 8px', borderRadius: '20px', border: '1px solid #6EE7B7', fontWeight: '600' },
   pillRow: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
   newPill: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   appliedPill: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
