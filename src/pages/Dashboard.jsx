@@ -11,7 +11,14 @@ import { JobCardSkeleton } from '../ui/Skeleton'
 
 // 'Needs Review' lives between Applying and Applied — that's where 'unknown'
 // outcomes surface so users can confirm-or-retry without losing them.
-const TABS = ['Job Matches', 'Applying', 'Needs Review', 'Applied']
+const TABS = ['Job Matches', 'Applying', 'Needs Review', 'Applied', 'Responses']
+
+const RESPONSE_KIND = {
+  interview:  { icon: '🎉', label: 'Interview',  color: '#047857', bg: '#ECFDF5' },
+  assessment: { icon: '🧪', label: 'Assessment', color: '#6D28D9', bg: '#EDE9FE' },
+  reply:      { icon: '💬', label: 'Reply',      color: '#1D4ED8', bg: '#EFF6FF' },
+  rejection:  { icon: '📕', label: 'Rejection',  color: '#6B7280', bg: '#F3F4F6' },
+}
 
 export default function Dashboard() {
   const [tab, setTab] = useState('Job Matches')
@@ -66,6 +73,9 @@ export default function Dashboard() {
   // Server-side filter (jobs.category column) — each mode re-fetches so the
   // 200-row window is spent entirely on that mode's jobs.
   const [jobMode, setJobMode] = useState('all')  // 'all' | 'professional' | 'warehouse_logistics'
+  // Response Inbox — recruiter replies / interview invites found in Gmail.
+  const [responses, setResponses] = useState({ responses: [], unseen: 0 })
+  const [scanningInbox, setScanningInbox] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   // Per-ATS performance breakdown — fetched alongside other dashboard
@@ -89,7 +99,40 @@ export default function Dashboard() {
   useEffect(() => {
     loadData()
     api.get('/auto-apply/').then(r => setAutoApply(r.data)).catch(() => {})
+    loadResponses()
   }, [])
+
+  const loadResponses = async () => {
+    try {
+      const r = await api.get('/responses/')
+      setResponses(r.data || { responses: [], unseen: 0 })
+    } catch {}
+  }
+
+  // Refresh the inbox whenever the user opens the tab (server scans every
+  // 20 min on its own; this just picks up whatever it found).
+  useEffect(() => {
+    if (tab === 'Responses') loadResponses()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
+  const scanInbox = async () => {
+    if (scanningInbox) return
+    setScanningInbox(true)
+    try {
+      const r = await api.post('/responses/scan')
+      await loadResponses()
+      const n = r.data?.new_responses || 0
+      toast[n > 0 ? 'success' : 'custom'](
+        n > 0 ? `📬 ${n} new response${n === 1 ? '' : 's'} found!` : 'Inbox scanned — nothing new.',
+        { duration: 3000 },
+      )
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Scan failed — check IMAP settings in Profile.')
+    } finally {
+      setScanningInbox(false)
+    }
+  }
 
   useEffect(() => {
     if (searchParams.get('tab') === 'filters') setShowFilters(true)
@@ -969,7 +1012,9 @@ export default function Dashboard() {
               ? queue.length
               : t === 'Needs Review'
                 ? (stats?.unknown || 0)
-                : 0
+                : t === 'Responses'
+                  ? (responses.unseen || 0)
+                  : 0
             return (
               <button
                 key={t}
@@ -1253,6 +1298,74 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        ) : tab === 'Responses' ? (
+          <div style={s.jobList}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={s.resultsBar}>
+                Replies to your applications, found in your Gmail automatically.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {responses.unseen > 0 && (
+                  <button style={s.chip} type="button"
+                    onClick={async () => { try { await api.put('/responses/seen-all'); loadResponses() } catch {} }}>
+                    Mark all read
+                  </button>
+                )}
+                <button
+                  style={{ ...s.chip, ...(scanningInbox ? { opacity: 0.6 } : s.chipBrand) }}
+                  onClick={scanInbox} disabled={scanningInbox} type="button">
+                  {scanningInbox ? 'Scanning…' : '📬 Scan inbox now'}
+                </button>
+              </div>
+            </div>
+            {responses.responses.length === 0 ? (
+              <div style={s.empty}>
+                <div style={s.emptyIcon}>📬</div>
+                <div style={s.emptyTitle}>No responses yet</div>
+                <div style={s.emptyText}>
+                  Recruiter replies, interview invites, and assessments will appear
+                  here automatically (checked every 20 minutes). Make sure your
+                  Gmail App Password is set in Profile → Email Verification.
+                </div>
+              </div>
+            ) : (
+              responses.responses.map(r => {
+                const k = RESPONSE_KIND[r.kind] || RESPONSE_KIND.reply
+                return (
+                  <div key={r.id}
+                    style={{
+                      ...s.queueCard,
+                      ...(r.seen ? {} : { borderColor: '#C4B5FD', background: 'rgba(237,233,254,0.45)' }),
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => { if (!r.seen) { api.put(`/responses/${r.id}/seen`).then(loadResponses).catch(() => {}) } }}
+                    title={r.seen ? '' : 'Click to mark as read'}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                          background: k.bg, color: k.color,
+                        }}>{k.icon} {k.label}</span>
+                        {!r.seen && <span style={{ fontSize: 10, fontWeight: 800, color: '#6D28D9' }}>● UNREAD</span>}
+                        <span style={s.queueTitle}>{r.subject}</span>
+                      </div>
+                      <div style={s.queueMeta}>
+                        {r.sender}
+                        {r.job_title && <> <span style={s.dot}>·</span> re: {r.job_title} @ {r.job_company}</>}
+                        <span style={s.dot}>·</span> {r.received_at ? new Date(r.received_at + 'Z').toLocaleString() : ''}
+                      </div>
+                      {r.snippet && (
+                        <div style={{ fontSize: 12.5, color: '#6B7280', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {r.snippet.slice(0, 220)}{r.snippet.length > 220 ? '…' : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
         ) : (
