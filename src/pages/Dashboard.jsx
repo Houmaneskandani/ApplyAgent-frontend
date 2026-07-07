@@ -286,6 +286,11 @@ export default function Dashboard() {
       if (filters.location?.trim()) jobsParams.location = filters.location.trim()
       if (debouncedSearch) jobsParams.search = debouncedSearch
       if (jobMode !== 'all') jobsParams.category = jobMode
+      // Status tabs fetch THEIR rows from the server — an old "Needs Review"
+      // item is invisible in the default top-200-by-score window, which made
+      // the tab show a count badge yet render empty.
+      const tabStatus = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : null
+      if (tabStatus) jobsParams.status = tabStatus
       // Server-side sort + freshness window: "Newest" and "Past 24h/7d" must
       // query the WHOLE corpus — the all-time score ranking is dominated by
       // old high scores, so purely client-side these controls could never
@@ -330,7 +335,8 @@ export default function Dashboard() {
   // rows, not "matching rows that happen to be in the global top-200".
   // Keyed on a serialized signature so unrelated (client-only) filter changes
   // like experience/work_type do NOT trigger a network round-trip.
-  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}`
+  const tabStatusSig = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : ''
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}|${tabStatusSig}`
   const filterSigMountedRef = useRef(false)
   useEffect(() => {
     // Skip the first run — the mount effect already did the initial fetch.
@@ -370,6 +376,14 @@ export default function Dashboard() {
       api.get('/queue/').then(r => setQueue(r.data)).catch(() => {})
       if (position > 1) {
         // Just added — no alert needed, UI shows position
+      }
+      // Be LOUD about dry-run mode: a user once queued 20+ jobs overnight
+      // believing they were applying — they were rehearsals. One clear toast
+      // per queue action prevents a wasted night of intent.
+      if (!liveMode) {
+        toast('🧪 Queued as DRY RUN — practice only, nothing is submitted. Switch ⚫ Dry Run → 🔴 Live Mode to apply for real.', {
+          duration: 6000, id: 'dry-run-notice',
+        })
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to queue application')
