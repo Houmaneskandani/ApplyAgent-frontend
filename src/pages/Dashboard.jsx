@@ -50,6 +50,10 @@ export default function Dashboard() {
   // mainly for the validation flow ("show me only Lever jobs so I can
   // test the Lever applier"). Ephemeral — not saved to preferences.
   const [atsFilter, setAtsFilter] = useState('all')  // 'all' | 'greenhouse' | 'lever' | ...
+  // Job mode: switch between career jobs and local warehouse/temp work.
+  // Server-side filter (jobs.category column) — each mode re-fetches so the
+  // 200-row window is spent entirely on that mode's jobs.
+  const [jobMode, setJobMode] = useState('all')  // 'all' | 'professional' | 'warehouse_logistics'
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   // Per-ATS performance breakdown — fetched alongside other dashboard
@@ -205,6 +209,7 @@ export default function Dashboard() {
       // "Seattle" used to show nothing despite 400+ Seattle jobs existing).
       if (filters.location?.trim()) jobsParams.location = filters.location.trim()
       if (debouncedSearch) jobsParams.search = debouncedSearch
+      if (jobMode !== 'all') jobsParams.category = jobMode
       const [jobsRes, statsRes, perAtsRes] = await Promise.all([
         api.get('/jobs/', { params: jobsParams }),
         api.get('/jobs/stats'),
@@ -237,7 +242,7 @@ export default function Dashboard() {
   // rows, not "matching rows that happen to be in the global top-200".
   // Keyed on a serialized signature so unrelated (client-only) filter changes
   // like experience/work_type do NOT trigger a network round-trip.
-  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}`
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}`
   const filterSigMountedRef = useRef(false)
   useEffect(() => {
     // Skip the first run — the mount effect already did the initial fetch.
@@ -984,6 +989,28 @@ export default function Dashboard() {
               </button>
             </div>
 
+            {/* Job mode — switch between career jobs and local warehouse/temp
+                work. Server-side (each mode re-fetches), so both worlds get
+                the full result window instead of competing for 200 rows. */}
+            <div style={s.modeRow} role="tablist" aria-label="Job mode">
+              {[
+                { key: 'all',                 label: '🗂 All' },
+                { key: 'professional',        label: '💼 Professional' },
+                { key: 'warehouse_logistics', label: '📦 Warehouse & Temp' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={jobMode === key}
+                  style={{ ...s.modeBtn, ...(jobMode === key ? s.modeBtnActive : {}) }}
+                  onClick={() => setJobMode(key)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div style={s.chipRow} className="trust-strip-scroll">
               <button
                 style={{ ...s.chip, ...(sortBy === 'score' && !strongOnly && !quickRemote && postedWithinDays === 0 ? s.chipActive : {}) }}
@@ -1183,6 +1210,7 @@ export default function Dashboard() {
                   if (quickRemote) active.push('Remote only')
                   if (postedWithinDays > 0) active.push(`Past ${postedWithinDays}d`)
                   if (atsFilter !== 'all') active.push(atsFilter)
+                  if (jobMode !== 'all') active.push(jobMode === 'warehouse_logistics' ? '📦 Warehouse & Temp mode' : '💼 Professional mode')
                   return active.length ? (
                     <div style={s.emptyText}>
                       Active filters: <strong>{active.join(' · ')}</strong>. Clear them to see more.
@@ -1790,6 +1818,35 @@ const s = {
     overflowX: 'auto',
     paddingBottom: 4,
     alignItems: 'center',
+  },
+  modeRow: {
+    display: 'inline-flex',
+    gap: 4,
+    padding: 4,
+    marginBottom: 10,
+    borderRadius: 12,
+    border: '1.5px solid rgba(196,181,253,0.35)',
+    background: 'rgba(255,255,255,0.72)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+  },
+  modeBtn: {
+    padding: '8px 16px',
+    borderRadius: 9,
+    border: 'none',
+    background: 'transparent',
+    color: '#374151',
+    fontWeight: 700,
+    fontSize: 13.5,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.15s',
+    fontFamily: 'inherit',
+  },
+  modeBtnActive: {
+    background: 'linear-gradient(135deg, #6D28D9, #4F46E5)',
+    color: '#fff',
+    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.30)',
   },
   chip: {
     display: 'inline-flex',

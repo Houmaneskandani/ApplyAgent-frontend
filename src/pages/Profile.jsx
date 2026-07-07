@@ -16,6 +16,7 @@ const JOB_CATEGORY_OPTIONS = [
   { value: 'it_helpdesk_sysadmin', label: '🛠️ IT / Help Desk / Sysadmin', desc: 'Support, desktop, systems & network admin' },
   { value: 'devops_cloud_sre', label: '☁️ DevOps / Cloud / SRE', desc: 'DevOps, cloud, platform, reliability' },
   { value: 'data_analytics', label: '📊 Data / Analytics', desc: 'Data analyst/engineer, BI, analytics' },
+  { value: 'warehouse_logistics', label: '📦 Warehouse & Logistics (local)', desc: 'In-person warehouse/temp work near you — needs your area below' },
 ]
 
 const SKILLS_LIST = ['Python', 'Go', 'Golang', 'JavaScript', 'TypeScript', 'Java', 'C++', 'Ruby', 'Rust', 'Swift', 'Kotlin', 'SQL', 'GraphQL', 'REST APIs', 'PostgreSQL', 'MongoDB', 'Redis', 'MySQL', 'AWS', 'GCP', 'Azure', 'Docker', 'Kubernetes', 'CI/CD', 'Linux', 'Backend', 'Frontend', 'Full Stack', 'DevOps', 'ML/AI', 'Data Engineering', 'Mobile', 'React', 'Node.js', 'Django', 'FastAPI', 'Spring Boot']
@@ -58,6 +59,8 @@ export default function Profile() {
     // Target Roles — which job categories the bot searches/scores, and whether
     // to also accept roles below the user's seniority.
     job_categories: [], open_to_lower_level: false,
+    // Where to search for LOCAL (in-person) categories like warehouse/temp.
+    local_job_area: '',
     // Education
     degree: "Bachelor's", major: '', school: '', graduation_year: '',
     // Portfolio
@@ -111,6 +114,7 @@ export default function Profile() {
         // Target Roles
         job_categories: Array.isArray(raw.job_categories) ? raw.job_categories : [],
         open_to_lower_level: raw.open_to_lower_level ?? false,
+        local_job_area: raw.local_job_area || '',
         // Education
         degree: raw.degree || "Bachelor's",
         major: raw.major || '',
@@ -327,6 +331,21 @@ export default function Profile() {
               above already turns this on automatically.
             </p>
           </Field>
+          {(form.job_categories || []).includes('warehouse_logistics') && (
+            <Field label="Local area for in-person jobs" required>
+              <input
+                style={s.input}
+                value={form.local_job_area}
+                onChange={e => update('local_job_area', e.target.value)}
+                placeholder="e.g. Santa Ana, CA"
+              />
+              <p style={{...s.sectionSubtitle, marginTop: 8}}>
+                Warehouse & temp jobs are searched around this area. Leave it
+                empty and the bot skips local search entirely (it never
+                searches nationwide for in-person work).
+              </p>
+            </Field>
+          )}
         </div>
       )
 
