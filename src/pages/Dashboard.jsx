@@ -30,7 +30,13 @@ export default function Dashboard() {
   // Default to DRY RUN. The confirm dialog only guards the dry→live toggle, so
   // defaulting to live meant a brand-new user's first "Apply Me" submitted a
   // REAL application with no confirmation. Start safe; the user opts into live.
-  const [liveMode, setLiveMode] = useState(false)
+  // Live Mode persists across reloads. It used to reset to false on every
+  // page load — combined with quiet dry-run results, the user twice queued a
+  // whole batch believing it was live. The enable-confirmation dialog still
+  // gates the FIRST switch to live; after that, the user's choice sticks.
+  const [liveMode, setLiveMode] = useState(() => {
+    try { return localStorage.getItem('live_mode') === '1' } catch { return false }
+  })
   // Ref mirror of liveMode. JobCard is memoized and deliberately ignores the
   // onApply handler's identity, so a card rendered while liveMode was false
   // keeps a handler that captured liveMode=false FOREVER — clicking Apply
@@ -986,7 +992,11 @@ export default function Dashboard() {
                 style={{...s.filterBtn, background: liveMode ? '#dc2626' : '#374151', marginRight: 8}}
                 onClick={() => {
                   if (!liveMode && !window.confirm('Enable Live Mode? This will ACTUALLY submit applications. Make sure your profile is complete.')) return
-                  setLiveMode(v => !v)
+                  setLiveMode(v => {
+                    const next = !v
+                    try { localStorage.setItem('live_mode', next ? '1' : '0') } catch {}
+                    return next
+                  })
                 }}
               >
                 {liveMode ? '🔴 Live Mode ON' : '⚫ Dry Run'}

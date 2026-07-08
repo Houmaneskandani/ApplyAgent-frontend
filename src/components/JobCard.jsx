@@ -85,6 +85,13 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
               <span style={s.queuedPill}>#{queueState.queue_position} Queued</span>
             ) : isUnknown ? (
               <span style={s.unknownPill}>⚠ Needs Review</span>
+            ) : (job.notes || '').includes('dry_run') ? (
+              // Outcome visibility: a dry-run rehearsal quietly returned the
+              // job to "new" with NO visible trace — the user couldn't tell
+              // whether anything happened. Say it plainly on the card.
+              <span style={s.rehearsedPill}>🧪 Rehearsed — NOT submitted</span>
+            ) : (job.notes || '').includes('unsupported') ? (
+              <span style={s.manualPill}>🖐 Manual apply only</span>
             ) : (
               <span style={s.newPill}>New</span>
             )}
@@ -224,6 +231,8 @@ const s = {
   title: { fontSize: '16px', fontWeight: '600', color: '#111' },
   matchBadge: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 8px', borderRadius: '20px', border: '1px solid #C4B5FD', fontWeight: '600' },
   freshBadge: { fontSize: '11px', background: '#ECFDF5', color: '#047857', padding: '2px 8px', borderRadius: '20px', border: '1px solid #6EE7B7', fontWeight: '600' },
+  rehearsedPill: { fontSize: '11px', background: '#FFFBEB', color: '#92400E', padding: '2px 8px', borderRadius: '20px', border: '1px solid #FCD34D', fontWeight: '700' },
+  manualPill: { fontSize: '11px', background: '#F3F4F6', color: '#374151', padding: '2px 8px', borderRadius: '20px', border: '1px solid #D1D5DB', fontWeight: '600' },
   pillRow: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
   newPill: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   appliedPill: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
