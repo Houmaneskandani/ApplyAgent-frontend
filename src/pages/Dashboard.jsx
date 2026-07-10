@@ -1517,6 +1517,9 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* Scrape trigger moved to the top bar ("Find new jobs") — omitting
+          onRefreshJobs hides FilterPanel's legacy "Search now" section,
+          so Filters is purely about filtering. */}
       {showFilters && (
         <FilterPanel
           filters={filters}
@@ -1524,9 +1527,6 @@ export default function Dashboard() {
           onSave={saveFilters}
           onClose={() => setShowFilters(false)}
           jobCount={filteredJobs.length}
-          {/* Scrape trigger moved to the top bar ("Find new jobs") — passing
-              no onRefreshJobs hides FilterPanel's legacy section, so Filters
-              is purely about filtering. */}
           refreshing={scraping}
         />
       )}
