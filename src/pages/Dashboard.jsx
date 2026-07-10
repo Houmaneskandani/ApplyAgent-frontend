@@ -90,6 +90,9 @@ export default function Dashboard() {
   // Response Inbox — recruiter replies / interview invites found in Gmail.
   const [responses, setResponses] = useState({ responses: [], unseen: 0 })
   const [scanningInbox, setScanningInbox] = useState(false)
+  // Role filter — server-side match on the job TITLE only ("show me software
+  // developer roles"). Ephemeral browse state, like atsFilter.
+  const [roleFilter, setRoleFilter] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [togglingAuto, setTogglingAuto] = useState(false)
   // Per-ATS performance breakdown — fetched alongside other dashboard
@@ -305,6 +308,8 @@ export default function Dashboard() {
       // the tab show a count badge yet render empty.
       const tabStatus = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : null
       if (tabStatus) jobsParams.status = tabStatus
+      // Role selector — title-only server-side match.
+      if (roleFilter) jobsParams.title = roleFilter
       // Server-side sort + freshness window: "Newest" and "Past 24h/7d" must
       // query the WHOLE corpus — the all-time score ranking is dominated by
       // old high scores, so purely client-side these controls could never
@@ -350,7 +355,7 @@ export default function Dashboard() {
   // Keyed on a serialized signature so unrelated (client-only) filter changes
   // like experience/work_type do NOT trigger a network round-trip.
   const tabStatusSig = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : ''
-  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}|${tabStatusSig}`
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}|${tabStatusSig}|${roleFilter}`
   const filterSigMountedRef = useRef(false)
   useEffect(() => {
     // Skip the first run — the mount effect already did the initial fetch.
@@ -800,6 +805,7 @@ export default function Dashboard() {
     setQuickRemote(false)
     setPostedWithinDays(0)
     setAtsFilter('all')
+    setRoleFilter('')
   }
 
   const activeCount = (filters.keywords?.length || 0)
@@ -1098,6 +1104,28 @@ export default function Dashboard() {
                   >✕</button>
                 )}
               </div>
+              {/* Role — server-side TITLE-only match ("show me software
+                  developer roles"). Presets cover the user's targets; the
+                  free-text search box handles anything else. */}
+              <select
+                value={roleFilter}
+                onChange={e => setRoleFilter(e.target.value)}
+                style={{ ...s.searchInput, flex: '0 1 210px', paddingLeft: 12, cursor: 'pointer',
+                         border: roleFilter ? '1.5px solid #4F46E5' : undefined }}
+                aria-label="Filter by role title"
+              >
+                <option value="">🎯 All roles</option>
+                <option value="software developer">Software Developer</option>
+                <option value="software engineer">Software Engineer</option>
+                <option value="backend">Backend</option>
+                <option value="frontend">Frontend</option>
+                <option value="full stack">Full Stack</option>
+                <option value="devops">DevOps</option>
+                <option value="site reliability">SRE</option>
+                <option value="it support">IT Support</option>
+                <option value="data engineer">Data Engineer</option>
+                <option value="warehouse">Warehouse</option>
+              </select>
               {/* "Where" — Indeed's What/Where pattern. Edits filters.location
                   (debounced), which the server applies across the WHOLE corpus. */}
               <div style={{ ...s.searchWrap, flex: '0 1 260px' }}>
@@ -1438,6 +1466,7 @@ export default function Dashboard() {
                   if (postedWithinDays > 0) active.push(`Past ${postedWithinDays}d`)
                   if (atsFilter !== 'all') active.push(atsFilter)
                   if (jobMode !== 'all') active.push(jobMode === 'warehouse_logistics' ? '📦 Warehouse & Temp mode' : '💼 Professional mode')
+                  if (roleFilter) active.push(`🎯 ${roleFilter}`)
                   return active.length ? (
                     <div style={s.emptyText}>
                       Active filters: <strong>{active.join(' · ')}</strong>. Clear them to see more.
