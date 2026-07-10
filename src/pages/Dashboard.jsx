@@ -1151,15 +1151,30 @@ export default function Dashboard() {
                 style={{ ...s.refreshBtn, opacity: refreshing ? 0.6 : 1 }}
                 onClick={refreshJobs}
                 disabled={refreshing}
-                aria-label="Refresh job list"
+                aria-label="Refresh the job list from your database"
                 type="button"
-                title="Refresh job list (does not run a new scrape)"
+                title="Reload the list from your database — picks up new scores and status changes. Does NOT search the web."
               >
                 <span style={{
                   display: 'inline-block',
                   animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
                 }}>↻</span>
-                <span>Refresh</span>
+                <span>Refresh list</span>
+              </button>
+              {/* The web-scrape trigger used to hide inside the Filters panel
+                  labeled "Search now" — read as "apply my filters" and
+                  collided with the search box. It's a first-class action:
+                  give it its own clearly-named button next to Refresh. */}
+              <button
+                style={{ ...s.refreshBtn, opacity: scraping ? 0.6 : 1 }}
+                onClick={runScrape}
+                disabled={scraping}
+                aria-label="Scan job boards for new postings"
+                type="button"
+                title="Go out to job boards (Greenhouse, Hacker News, aggregators…) and pull fresh postings matching your profile. Takes ~30-60 seconds."
+              >
+                <span>{scraping ? '⏳' : '🌐'}</span>
+                <span>{scraping ? 'Scanning…' : 'Find new jobs'}</span>
               </button>
             </div>
 
@@ -1509,7 +1524,9 @@ export default function Dashboard() {
           onSave={saveFilters}
           onClose={() => setShowFilters(false)}
           jobCount={filteredJobs.length}
-          onRefreshJobs={runScrape}
+          {/* Scrape trigger moved to the top bar ("Find new jobs") — passing
+              no onRefreshJobs hides FilterPanel's legacy section, so Filters
+              is purely about filtering. */}
           refreshing={scraping}
         />
       )}
