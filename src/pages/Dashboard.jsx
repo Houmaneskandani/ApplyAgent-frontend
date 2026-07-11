@@ -50,7 +50,7 @@ export default function Dashboard() {
   const [queue, setQueue] = useState([]) // [{job_id, status, queue_position, title, company, source, dry_run}]
   const [filters, setFilters] = useState({
     keywords: [], experience: [], work_type: [],
-    industries: [],
+    industries: [], title_roles: [],
     min_salary: 0, job_type: ['Full time'],
     exclude_companies: '', location: ''
   })
@@ -817,7 +817,7 @@ export default function Dashboard() {
   const clearFilters = () => {
     const empty = {
       keywords: [], experience: [], work_type: [],
-      industries: [],
+      industries: [], title_roles: [],
       min_salary: 0, job_type: ['Full time'],
       exclude_companies: '', location: ''
     }
@@ -833,6 +833,7 @@ export default function Dashboard() {
   }
 
   const activeCount = (filters.keywords?.length || 0)
+    + (filters.title_roles?.length || 0)
     + (filters.experience?.length || 0)
     + (filters.work_type?.length || 0)
     + (filters.industries?.length || 0)
@@ -964,6 +965,16 @@ export default function Dashboard() {
                     }}>✕</button>
                   </span>
                 )}
+                {filters.title_roles?.map(r => (
+                  <span key={`ar-${r}`} style={s.filterChip} title="Auto-Apply targets this role title only (browsing unaffected)">
+                    🤖 {r}
+                    <button type="button" style={s.chipRemove} onClick={() => {
+                      const newFilters = {...filters, title_roles: filters.title_roles.filter(x => x !== r)}
+                      setFilters(newFilters)
+                      saveFilters(newFilters)
+                    }}>✕</button>
+                  </span>
+                ))}
                 {filters.keywords?.map(kw => (
                   <span key={kw} style={s.filterChip}>
                     {kw}

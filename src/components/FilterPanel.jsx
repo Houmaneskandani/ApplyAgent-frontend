@@ -5,6 +5,9 @@ const EXPERIENCE_LEVELS = ['Entry Level & Graduate', 'Junior (1-2 years)', 'Mid 
 const JOB_TYPES = ['Full time', 'Part time', 'Contract']
 const INDUSTRIES = ['FinTech', 'AI / ML', 'Healthcare', 'E-commerce', 'Cybersecurity', 'Media & Entertainment', 'Developer Tools', 'Infrastructure']
 const KEYWORDS = ['Python', 'Go', 'Golang', 'JavaScript', 'Backend', 'API', 'PostgreSQL', 'AWS', 'GCP', 'Docker', 'Kubernetes', 'GraphQL', 'MongoDB']
+// Title phrases for Auto-Apply role targeting — matched against the job TITLE
+// only (keywords above also match descriptions, which is far looser).
+const AUTO_APPLY_ROLES = ['software developer', 'software engineer', 'devops', 'backend', 'frontend', 'full stack', 'site reliability', 'it support', 'data engineer', 'warehouse']
 
 export default function FilterPanel({ filters, onChange, onClose, jobCount, onSave, onRefreshJobs, refreshing = false }) {
   const [local, setLocal] = useState(filters)
@@ -58,6 +61,26 @@ export default function FilterPanel({ filters, onChange, onClose, jobCount, onSa
               </div>
             </div>
           )}
+
+          {/* Auto-Apply role targeting — affects the BOT only, not browsing */}
+          <div style={s.section}>
+            <div style={s.sectionHeader}>
+              <span style={s.sectionIcon}>🤖</span>
+              <span style={s.sectionTitle}>Auto-Apply roles</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: '#6B7280', marginBottom: 8 }}>
+              When set, the bot only auto-applies to jobs whose <b>title</b> contains
+              one of these. Empty = all your matches. Browsing is unaffected.
+            </div>
+            <div style={s.tagGrid}>
+              {AUTO_APPLY_ROLES.map(r => (
+                <button key={r} onClick={() => toggle('title_roles', r)}
+                  style={{...s.tag, ...(has('title_roles', r) ? s.tagActive : {})}}>
+                  {r} {has('title_roles', r) && <span onClick={e => { e.stopPropagation(); toggle('title_roles', r) }}>✕</span>}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Job section */}
           <div style={s.section}>
