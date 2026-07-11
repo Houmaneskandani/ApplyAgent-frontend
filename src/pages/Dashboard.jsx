@@ -184,6 +184,7 @@ export default function Dashboard() {
 
   // Poll queue — every 2s while something is applying, every 5s otherwise
   const hasApplying = queue.some(q => q.status === 'applying')
+  const queueEmpty = queue.length === 0
   const prevQueueRef = useRef([])
   useEffect(() => {
     const poll = async () => {
@@ -194,14 +195,23 @@ export default function Dashboard() {
         const hadActive = prevQueueRef.current.some(q => q.status !== 'failed')
         const hasActive = newQueue.some(q => q.status !== 'failed')
         if (hadActive && !hasActive) loadData()
+        // Skip the state update when nothing changed — every setQueue with a
+        // fresh array re-renders the whole dashboard tree, and at one poll
+        // per 2-5s that was a constant background re-render for no reason.
+        const sig = (q) => q.map(x => `${x.job_id}:${x.status}:${x.queue_position}:${x.notes || ''}`).join('|')
+        if (sig(newQueue) !== sig(prevQueueRef.current)) {
+          setQueue(newQueue)
+        }
         prevQueueRef.current = newQueue
-        setQueue(newQueue)
       } catch {}
     }
     poll()
-    queuePollRef.current = setInterval(poll, hasApplying ? 2000 : 5000)
+    // 2s while actively applying, 5s with a waiting queue, 15s when idle —
+    // an idle dashboard was making ~12 queue requests/minute for nothing.
+    const interval = hasApplying ? 2000 : (queueEmpty ? 15000 : 5000)
+    queuePollRef.current = setInterval(poll, interval)
     return () => clearInterval(queuePollRef.current)
-  }, [hasApplying])
+  }, [hasApplying, queueEmpty])
 
   // Onboarding checklist state. Three concrete steps the user needs to
   // complete before applies will work well:
@@ -283,7 +293,7 @@ export default function Dashboard() {
     loadFilters()
   }, [])
 
-  const loadData = async () => {
+  const loadData = async ({ withStats = true } = {}) => {
     // Latest-wins: multiple triggers (mount, filter change, poll, focus, queue
     // drain) can call loadData concurrently. Tag each request and drop stale
     // responses so an in-flight UNFILTERED fetch can never overwrite the
@@ -317,21 +327,24 @@ export default function Dashboard() {
       jobsParams.sort = sortBy === 'date' ? 'date' : 'score'
       if (postedWithinDays > 0) jobsParams.posted_within_days = postedWithinDays
       setIsFetching(true)
+      // Stats + per-ATS are FILTER-INDEPENDENT — refetching them on every
+      // filter/search change was pure waste (3 requests where 1 suffices).
       const [jobsRes, statsRes, perAtsRes] = await Promise.all([
         api.get('/jobs/', { params: jobsParams }),
-        api.get('/jobs/stats'),
-        // Per-ATS breakdown — best-effort; if it fails (e.g., transient
-        // 500 from the new endpoint) we don't break the dashboard.
-        api.get('/jobs/stats/per-ats').catch(() => ({ data: { per_ats: [], total_attempts: 0 } })),
+        withStats ? api.get('/jobs/stats') : Promise.resolve(null),
+        withStats
+          ? api.get('/jobs/stats/per-ats').catch(() => ({ data: { per_ats: [], total_attempts: 0 } }))
+          : Promise.resolve(null),
       ])
-      if (myReqId !== loadReqIdRef.current) return  // superseded by a newer load
+      if (myReqId !== loadReqIdRef.current) return true  // superseded by a newer load
       setAllJobs(jobsRes.data)
       const t = parseInt(jobsRes.headers?.['x-total-count'], 10)
       setTotalCount(Number.isFinite(t) ? t : null)
-      setStats(statsRes.data)
-      setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
+      if (statsRes) setStats(statsRes.data)
+      if (perAtsRes) setPerAtsStats(perAtsRes.data || { per_ats: [], total_attempts: 0 })
+      return true
     } catch (err) {
-      if (myReqId !== loadReqIdRef.current) return  // superseded — ignore stale error
+      if (myReqId !== loadReqIdRef.current) return false  // superseded — ignore stale error
       // Only an AUTH failure should bounce to /login — the axios 401
       // interceptor already handles that globally. A transient 500 / network
       // blip must NOT log the user out (their token is still valid); show an
@@ -339,6 +352,7 @@ export default function Dashboard() {
       if (err?.response?.status !== 401) {
         toast.error('Could not load jobs — check your connection and refresh.')
       }
+      return false
     } finally {
       if (myReqId === loadReqIdRef.current) {
         setLoading(false)
@@ -363,7 +377,7 @@ export default function Dashboard() {
     // latest-wins in loadData drops the stale response, so a saved filter that
     // loads mid-initial-fetch still wins.
     if (!filterSigMountedRef.current) { filterSigMountedRef.current = true; return }
-    loadData()
+    loadData({ withStats: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverFilterSig])
 
@@ -506,8 +520,9 @@ export default function Dashboard() {
   const refreshJobs = useCallback(async () => {
     setRefreshing(true)
     try {
-      await loadData()
-      toast.success('Job list refreshed', { duration: 2000 })
+      const ok = await loadData()
+      if (ok) toast.success('Job list refreshed', { duration: 2000 })
+      else toast.error('Could not refresh — try again in a moment')
     } catch {
       toast.error('Could not refresh — try again in a moment')
     } finally {
@@ -915,10 +930,15 @@ export default function Dashboard() {
               </div>
 
               <div style={s.statCard}>
+                {/* Server-side total for the current filters — NOT the number
+                    of rows on screen. The old "Showing: 127" card contradicted
+                    the "10,057 jobs found" results bar and read as a bug. */}
                 <div style={s.statNum}>
-                  {tab === 'Applying' ? queue.length : filteredJobs.length}
+                  {tab === 'Applying'
+                    ? queue.length
+                    : (totalCount ?? filteredJobs.length).toLocaleString()}
                 </div>
-                <div style={s.statLabel}>Showing</div>
+                <div style={s.statLabel}>{tab === 'Applying' ? 'In queue' : 'Matching filters'}</div>
               </div>
             </div>
 
@@ -995,7 +1015,16 @@ export default function Dashboard() {
                 </div>
               </button>
               <button
-                style={{...s.filterBtn, background: liveMode ? '#dc2626' : '#374151', marginRight: 8}}
+                style={{
+                  ...s.filterBtn,
+                  marginRight: 8,
+                  // Dry state: quiet outline (the old near-black chip was the
+                  // heaviest element on screen for the *safe* mode). Live
+                  // state stays loud red — that's the one that spends money.
+                  ...(liveMode
+                    ? { background: '#dc2626', color: '#fff' }
+                    : { background: 'rgba(255,255,255,0.8)', color: '#374151', border: '1.5px solid #D1D5DB' }),
+                }}
                 onClick={() => {
                   if (!liveMode && !window.confirm('Enable Live Mode? This will ACTUALLY submit applications. Make sure your profile is complete.')) return
                   setLiveMode(v => {
@@ -1827,7 +1856,7 @@ const s = {
   // ─── Stat cards (compact 4-col grid, glassmorphic, no emojis) ──────
   statsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',  // 2x2 on phones
     gap: 10,
     marginBottom: 12,
   },
@@ -1885,8 +1914,8 @@ const s = {
     whiteSpace: 'nowrap',
     transition: 'all 0.15s',
   },
-  tabs: { display: 'flex', marginBottom: '12px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '12px', padding: '4px', border: '1px solid rgba(196,181,253,0.35)' },
-  tab: { flex: 1, padding: '10px 16px', border: 'none', background: 'none', fontSize: '14px', fontWeight: '500', color: '#8B85C1', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+  tabs: { display: 'flex', overflowX: 'auto', marginBottom: '12px', background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', borderRadius: '12px', padding: '4px', border: '1px solid rgba(196,181,253,0.35)' },
+  tab: { flex: '1 0 auto', padding: '10px 16px', border: 'none', background: 'none', fontSize: '14px', fontWeight: '500', color: '#8B85C1', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
   tabActive: { background: 'linear-gradient(135deg, #6d28d9, #4f46e5)', color: '#fff' },
   tabArrow: { color: '#ccc', fontSize: '18px' },
   jobList: { display: 'flex', flexDirection: 'column' },
@@ -2026,9 +2055,13 @@ const s = {
     display: 'flex',
     gap: 10,
     alignItems: 'stretch',
+    // Five controls share this row; without wrapping, the flexible search
+    // input was crushed to a few px ("S" sliver observed live).
+    flexWrap: 'wrap',
   },
   searchWrap: {
-    flex: 1,
+    flex: '2 1 260px',
+    minWidth: 220,
     position: 'relative',
     display: 'flex',
     alignItems: 'center',

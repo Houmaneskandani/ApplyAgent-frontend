@@ -62,7 +62,9 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
   }
 
   return (
-    <div style={s.card} className="job-card-hover" onClick={onClick}>
+    <div style={s.card} className="job-card-hover" onClick={onClick}
+      role="button" tabIndex={0} aria-label={`Open ${job.title} at ${job.company || 'unknown company'}`}
+      onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); onClick?.() } }}>
       <div style={s.cardInner}>
         {/* Left: title + meta */}
         <div style={s.left}>
@@ -92,9 +94,9 @@ function JobCard({ job, onApply, applying, onClick, queueState }) {
               <span style={s.rehearsedPill}>🧪 Rehearsed — NOT submitted</span>
             ) : (job.notes || '').includes('unsupported') ? (
               <span style={s.manualPill}>🖐 Manual apply only</span>
-            ) : (
-              <span style={s.newPill}>New</span>
-            )}
+            ) : null /* default "New" status pill dropped — it duplicated the
+              🆕 freshness badge with a different meaning (not-applied vs
+              recently-added) and made cards read "New … New". */}
             {appliedAt ? (
               <>
                 <span style={s.dot}>·</span>
@@ -236,12 +238,12 @@ const s = {
   pillRow: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
   newPill: { fontSize: '11px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   appliedPill: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
-  appliedTime: { fontSize: '12px', color: '#16a34a', fontWeight: '600', cursor: 'help' },
+  appliedTime: { fontSize: '12px', color: '#15803d', fontWeight: '600', cursor: 'help' },
   applyingPill: { fontSize: '12px', background: '#FEF3C7', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '500' },
   queuedPill: { fontSize: '12px', background: '#EDE9FE', color: '#6D28D9', padding: '2px 10px', borderRadius: '20px', fontWeight: '600' },
   unknownPill: { fontSize: '12px', background: '#FFFBEB', color: '#92400E', padding: '2px 10px', borderRadius: '20px', fontWeight: '600', border: '1px solid #FCD34D' },
   dot: { color: '#ccc', fontSize: '12px' },
-  metaText: { fontSize: '13px', color: '#888' },
+  metaText: { fontSize: '13px', color: '#6B7280' },
   companyRow: { display: 'flex', alignItems: 'center', gap: '10px' },
   logo: { width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: '700', flexShrink: 0 },
   companyName: { fontSize: '13px', fontWeight: '600', color: '#444' },

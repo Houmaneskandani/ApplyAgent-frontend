@@ -204,7 +204,7 @@ export default function FilterPanel({ filters, onChange, onClose, jobCount, onSa
 
 const s = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' },
-  panel: { background: '#fff', width: '480px', height: '100vh', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
+  panel: { background: '#fff', width: 'min(480px, 100vw)', height: '100vh', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 16px', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, background: '#fff', zIndex: 1 },
   title: { fontSize: '24px', fontWeight: '700' },
   closeBtn: { background: 'none', border: 'none', fontSize: '20px', color: '#888', padding: '4px 8px', borderRadius: '6px' },
