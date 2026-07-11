@@ -317,7 +317,16 @@ export default function Dashboard() {
       // item is invisible in the default top-200-by-score window, which made
       // the tab show a count badge yet render empty.
       const tabStatus = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : null
-      if (tabStatus) jobsParams.status = tabStatus
+      if (tabStatus) {
+        jobsParams.status = tabStatus
+      } else {
+        // Browse view: only fresh rows (status new), and hide every role the
+        // user already applied to / queued — INCLUDING duplicate re-postings
+        // of the same company+title under a different job id. "The job I
+        // already applied to is not in the list anymore."
+        jobsParams.status = 'new'
+        jobsParams.exclude_attempted = true
+      }
       // Role selector — title-only server-side match.
       if (roleFilter) jobsParams.title = roleFilter
       // Server-side sort + freshness window: "Newest" and "Past 24h/7d" must
