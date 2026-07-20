@@ -1181,12 +1181,22 @@ export default function Dashboard() {
                 <span style={s.searchIcon} aria-hidden="true">📍</span>
                 <input
                   type="text"
-                  placeholder="City, state, or “remote”"
+                  placeholder="City, metro, or “remote”"
                   value={locInput}
                   onChange={e => setLocInput(e.target.value)}
                   style={s.searchInput}
                   aria-label="Filter by location"
+                  list="metro-suggestions"
                 />
+                {/* Metro names expand server-side to the whole area
+                    (LA → Santa Monica, Burbank, Irvine, ...) */}
+                <datalist id="metro-suggestions">
+                  <option value="Los Angeles" label="Los Angeles (metro incl. OC)" />
+                  <option value="SF Bay Area" />
+                  <option value="New York" label="New York (metro)" />
+                  <option value="Seattle" label="Seattle (metro)" />
+                  <option value="remote" label="Remote only" />
+                </datalist>
                 {locInput && (
                   <button
                     style={s.searchClear}
