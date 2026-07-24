@@ -56,7 +56,7 @@ function sanitizeDescription(html) {
   )
 }
 
-export default function JobDetail({ job, onClose, onApply, applying }) {
+export default function JobDetail({ job, onClose, onApply, applying, onBlockCompany }) {
   const isMobile = useIsMobile()
   const [description, setDescription] = useState(null)
   const panelRef = useRef(null)
@@ -184,6 +184,24 @@ export default function JobDetail({ job, onClose, onApply, applying }) {
             </button>
           </div>
 
+          {/* Company blocklist — for rejections with a re-apply cooldown
+              (e.g. SpaceX). Blocks the WHOLE company across browse + auto-apply,
+              not just this posting. */}
+          {job.company && onBlockCompany && (
+            <button
+              type="button"
+              style={s.blockBtn}
+              onClick={() => {
+                if (window.confirm(`Never auto-apply to ${job.company} again?\n\nThis hides all ${job.company} jobs and stops the bot from applying there. You can undo it anytime in Filters → Excluded companies.`)) {
+                  onBlockCompany(job.company)
+                  onClose()
+                }
+              }}
+            >
+              🚫 Never apply to {job.company} again
+            </button>
+          )}
+
           {/* Divider */}
           <div style={s.divider} />
 
@@ -249,7 +267,8 @@ const s = {
   score: { fontSize: '13px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', border: '1.5px solid' },
   sourceBadge: { fontSize: '12px', padding: '4px 10px', borderRadius: '20px', fontWeight: '500' },
   appliedBadge: { fontSize: '12px', background: '#f0fdf4', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', border: '1px solid #bbf7d0', fontWeight: '500' },
-  actions: { display: 'flex', gap: '10px', marginBottom: '24px' },
+  actions: { display: 'flex', gap: '10px', marginBottom: '12px' },
+  blockBtn: { width: '100%', padding: '9px', marginBottom: '20px', background: '#fff', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' },
   viewBtn: { flex: 1, padding: '10px 16px', borderRadius: '8px', border: '1px solid #e0e0e0', color: '#555', background: 'none', fontSize: '14px', fontWeight: '500', textAlign: 'center' },
   applyBtn: { flex: 1, padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', textAlign: 'center' },
   divider: { height: '1px', background: '#f0f0f0', margin: '20px 0' },

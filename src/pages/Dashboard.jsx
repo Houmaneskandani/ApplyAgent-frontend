@@ -329,6 +329,9 @@ export default function Dashboard() {
       }
       // Role selector — title-only server-side match.
       if (roleFilter) jobsParams.title = roleFilter
+      // Company blocklist — hide blocked companies from browse entirely
+      // (server-side), matching what auto-apply + the apply guard enforce.
+      if (filters.exclude_companies?.trim()) jobsParams.exclude_companies = filters.exclude_companies.trim()
       // Server-side sort + freshness window: "Newest" and "Past 24h/7d" must
       // query the WHOLE corpus — the all-time score ranking is dominated by
       // old high scores, so purely client-side these controls could never
@@ -378,7 +381,7 @@ export default function Dashboard() {
   // Keyed on a serialized signature so unrelated (client-only) filter changes
   // like experience/work_type do NOT trigger a network round-trip.
   const tabStatusSig = tab === 'Applied' ? 'applied' : tab === 'Needs Review' ? 'unknown' : ''
-  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}|${tabStatusSig}|${roleFilter}`
+  const serverFilterSig = `${atsFilter}|${(filters.location || '').trim()}|${debouncedSearch}|${jobMode}|${sortBy}|${postedWithinDays}|${tabStatusSig}|${roleFilter}|${(filters.exclude_companies || '').trim()}`
   const filterSigMountedRef = useRef(false)
   useEffect(() => {
     // Skip the first run — the mount effect already did the initial fetch.
@@ -814,6 +817,19 @@ export default function Dashboard() {
   // gradient for several seconds. Perceived performance > actual performance.
   const showSkeletons = loading
 
+  // Add a company to the blocklist (comma-separated exclude_companies) —
+  // honored by browse, auto-apply, and the manual apply guard. Saves + refetches.
+  const blockCompany = (company) => {
+    const name = (company || '').trim()
+    if (!name) return
+    const existing = (filters.exclude_companies || '').split(',').map(s => s.trim()).filter(Boolean)
+    if (existing.some(e => e.toLowerCase() === name.toLowerCase())) return
+    const next = { ...filters, exclude_companies: [...existing, name].join(', ') }
+    setFilters(next)
+    saveFilters(next)
+    toast.success(`🚫 Blocked ${name} — you won't apply there again`, { duration: 3500 })
+  }
+
   const clearFilters = () => {
     const empty = {
       keywords: [], experience: [], work_type: [],
@@ -965,6 +981,17 @@ export default function Dashboard() {
                     }}>✕</button>
                   </span>
                 )}
+                {(filters.exclude_companies || '').split(',').map(c => c.trim()).filter(Boolean).map(c => (
+                  <span key={`blk-${c}`} style={{...s.filterChip, background: '#FEF2F2', color: '#b91c1c', borderColor: '#fecaca'}} title="Blocked company — hidden everywhere, never auto-applied">
+                    🚫 {c}
+                    <button type="button" style={s.chipRemove} onClick={() => {
+                      const rest = (filters.exclude_companies || '').split(',').map(x => x.trim()).filter(Boolean).filter(x => x !== c)
+                      const next = {...filters, exclude_companies: rest.join(', ')}
+                      setFilters(next)
+                      saveFilters(next)
+                    }}>✕</button>
+                  </span>
+                ))}
                 {filters.title_roles?.map(r => (
                   <span key={`ar-${r}`} style={s.filterChip} title="Auto-Apply targets this role title only (browsing unaffected)">
                     🤖 {r}
@@ -1596,6 +1623,7 @@ export default function Dashboard() {
           onClose={() => setSelectedJob(null)}
           onApply={applyToJob}
           applying={applying}
+          onBlockCompany={blockCompany}
         />
       )}
     </div>
