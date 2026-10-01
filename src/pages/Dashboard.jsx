@@ -104,6 +104,11 @@ export default function Dashboard() {
   const queuePollRef = useRef(null)
   const scrapePollRef = useRef(null)
   const loadReqIdRef = useRef(0)  // latest-wins guard for concurrent loadData calls
+  // Always points at the CURRENT loadData (assigned right after it's defined
+  // below). loadData isn't memoized — it closes over the live filters/tab —
+  // so any timer, poll or []-deps callback must call loadDataRef.current()
+  // instead of capturing a stale loadData from the first render.
+  const loadDataRef = useRef(null)
 
   // PERF: memoize so unrelated state changes (filter chip clicks, search
   // params, applying flips) don't rebuild this object every render — which
@@ -194,7 +199,7 @@ export default function Dashboard() {
         // If queue just drained (had active jobs, now none), refresh allJobs so Applied tab updates
         const hadActive = prevQueueRef.current.some(q => q.status !== 'failed')
         const hasActive = newQueue.some(q => q.status !== 'failed')
-        if (hadActive && !hasActive) loadData()
+        if (hadActive && !hasActive) loadDataRef.current?.()
         // Skip the state update when nothing changed — every setQueue with a
         // fresh array re-renders the whole dashboard tree, and at one poll
         // per 2-5s that was a constant background re-render for no reason.
@@ -372,6 +377,7 @@ export default function Dashboard() {
       }
     }
   }
+  loadDataRef.current = loadData
 
   // Re-fetch whenever a SERVER-SIDE filter changes (ATS bucket, location, or
   // the debounced search term). These can't be resolved client-side because
@@ -532,7 +538,11 @@ export default function Dashboard() {
   const refreshJobs = useCallback(async () => {
     setRefreshing(true)
     try {
-      const ok = await loadData()
+      // Via the ref: this callback has [] deps, so a direct loadData() call
+      // would be the FIRST render's closure — default tab, no ATS/search/
+      // location filters — and "Refresh" would quietly show an unfiltered
+      // list under still-active filter chips.
+      const ok = await loadDataRef.current()
       if (ok) toast.success('Job list refreshed', { duration: 2000 })
       else toast.error('Could not refresh — try again in a moment')
     } catch {
@@ -596,7 +606,7 @@ export default function Dashboard() {
       // Hard timeout
       if (Date.now() - start > 4 * 60 * 1000) {
         finish('Still running in the background — check back in a minute', 'info')
-        loadData()
+        loadDataRef.current()
         return
       }
       try {
@@ -612,7 +622,7 @@ export default function Dashboard() {
         const prevScored = lastScored
         if (r.data.scored > lastScored) {
           lastScored = r.data.scored
-          await loadData()
+          await loadDataRef.current()  // current filters, not the ones at scrape start
         }
         // Done heuristic: after >=30s, if scored didn't move since the
         // previous poll, assume the scrape finished.
@@ -638,12 +648,9 @@ export default function Dashboard() {
     if (scrapePollRef.current) clearInterval(scrapePollRef.current)
   }, [])
 
-  // Keep refs to the latest loadData + "busy" flag so the timers below always
-  // use the CURRENT filters and never fire mid-action. loadData isn't memoized,
-  // so capturing it in a []-deps effect would freeze it at the initial (empty)
-  // filters and a background poll would clobber the user's filtered view.
-  const loadDataRef = useRef(loadData)
-  loadDataRef.current = loadData
+  // Keep a ref to the "busy" flag so the timers below never fire mid-action.
+  // (loadDataRef — the matching ref for the CURRENT loadData — is declared at
+  // the top of the component and assigned right after loadData.)
   const busyRef = useRef(false)
   busyRef.current = loading || refreshing || scraping || hasApplying
 
