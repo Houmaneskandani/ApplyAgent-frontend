@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { capturePageview } from './lib/analytics'
+import ErrorBoundary from './components/ErrorBoundary'
 
 /**
  * Fire a $pageview event on every route change. Lives inside <BrowserRouter>
@@ -52,10 +53,19 @@ function RouteFallback() {
   )
 }
 
+// Catches render errors AND failed lazy-route imports (stale chunk URLs after
+// a deploy), which otherwise unmount the whole app to a blank page. Keyed on
+// the pathname so navigating to another route gives it a clean slate.
+function RouteErrorBoundary({ children }) {
+  const location = useLocation()
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <PageviewTracker />
+      <RouteErrorBoundary>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -74,6 +84,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </Suspense>
+      </RouteErrorBoundary>
     </BrowserRouter>
   )
 }
